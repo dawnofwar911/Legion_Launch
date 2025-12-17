@@ -132,18 +132,27 @@ public class LocalLibraryService
                             var xml = File.ReadAllText(configPath);
                             var storeIdMatch = System.Text.RegularExpressions.Regex.Match(xml, "<StoreId>(.*?)</StoreId>", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
                             var nameMatch = System.Text.RegularExpressions.Regex.Match(xml, "DefaultDisplayName=\"(.*?)\"", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                            
+                            // Look for <Executable Name="..." Id="..." />
+                            var exeIdMatch = System.Text.RegularExpressions.Regex.Match(xml, "<Executable.*?Id=\"(.*?)\"", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
 
                             if (storeIdMatch.Success)
                             {
                                 string storeId = storeIdMatch.Groups[1].Value.Trim();
                                 string name = nameMatch.Success ? nameMatch.Groups[1].Value : Path.GetFileName(gameDir);
+                                string? exeId = exeIdMatch.Success ? exeIdMatch.Groups[1].Value : null;
+
+                                string launchUri = !string.IsNullOrEmpty(exeId) 
+                                    ? $"msgamelaunch://shortcutLaunch/?ProductId={storeId}&Exe={exeId}"
+                                    : $"ms-windows-store://pdp/?ProductId={storeId}";
+
                                 games.Add(new InstalledGame
                                 {
                                     Id = storeId,
                                     Name = name,
                                     Source = "Xbox",
                                     InstallPath = gameDir,
-                                    LaunchUri = $"ms-windows-store://pdp/?ProductId={storeId}"
+                                    LaunchUri = launchUri
                                 });
                             }
                         }
@@ -255,7 +264,7 @@ public class LocalLibraryService
                                     Name = name,
                                     Source = "Ubisoft",
                                     InstallPath = installDir ?? string.Empty,
-                                    LaunchUri = "uplay://launch/" + subKeyName + "/0"
+                                    LaunchUri = "upc://launch/" + subKeyName + "/0"
                                 });
                             }
                         }
