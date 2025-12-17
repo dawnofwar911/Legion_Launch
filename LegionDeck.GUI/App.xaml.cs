@@ -7,7 +7,7 @@ namespace LegionDeck.GUI
     /// </summary>
     public partial class App : Application
     {
-        private Window window = Window.Current;
+        private Window? window;
 
         /// <summary>
         /// Initializes the singleton application object.  This is the first line of authored code
@@ -16,6 +16,25 @@ namespace LegionDeck.GUI
         public App()
         {
             this.InitializeComponent();
+            this.UnhandledException += App_UnhandledException;
+            Log("App Constructor started");
+        }
+
+        private void App_UnhandledException(object sender, Microsoft.UI.Xaml.UnhandledExceptionEventArgs e)
+        {
+            Log($"Unhandled Exception: {e.Message}\n{e.Exception}");
+        }
+
+        private void Log(string message)
+        {
+            try
+            {
+                var path = System.IO.Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.LocalApplicationData), "LegionDeck", "startup.log");
+                var dir = System.IO.Path.GetDirectoryName(path);
+                if (dir != null) System.IO.Directory.CreateDirectory(dir);
+                System.IO.File.AppendAllText(path, $"{System.DateTime.Now:yyyy-MM-dd HH:mm:ss} - {message}\n");
+            }
+            catch { }
         }
 
         /// <summary>
@@ -25,16 +44,19 @@ namespace LegionDeck.GUI
         /// <param name="e">Details about the launch request and process.</param>
         protected override void OnLaunched(LaunchActivatedEventArgs e)
         {
-            window ??= new Window();
+            Log("OnLaunched started");
+            window = new Window();
+            window.Title = "LegionDeck";
 
-            if (window.Content is not Frame rootFrame)
+            Frame rootFrame = new Frame();
+            rootFrame.NavigationFailed += OnNavigationFailed;
+            window.Content = rootFrame;
+
+            if (rootFrame.Content == null)
             {
-                rootFrame = new Frame();
-                rootFrame.NavigationFailed += OnNavigationFailed;
-                window.Content = rootFrame;
+                rootFrame.Navigate(typeof(MainPage), e.Arguments);
             }
-
-            _ = rootFrame.Navigate(typeof(MainPage), e.Arguments);
+            
             window.Activate();
         }
 
