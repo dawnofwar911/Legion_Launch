@@ -5,6 +5,9 @@ using System;
 using System.Threading.Tasks;
 using LegionDeck.CLI.Services;
 using System.IO;
+using System.Linq;
+using System.Collections.Generic;
+using System.Threading;
 
 namespace LegionDeck.CLI;
 
@@ -19,7 +22,7 @@ public class Program
     [Verb("auth", HelpText = "Authenticate with game services.")]
     public class AuthOptions
     {
-        [Option('s', "service", Required = true, HelpText = "Service to authenticate (steam, xbox, all).")]
+        [Option('s', "service", Required = true, HelpText = "Service to authenticate (steam, xbox, ea, ubisoft, all).")]
         public string Service { get; set; } = string.Empty;
     }
 
@@ -35,7 +38,8 @@ public class Program
         [Option('e', "eaplay", Required = false, HelpText = "Check EA Play subscription status.")]
         public bool EaPlay { get; set; }
 
-        // Add other sync options here as needed, e.g., --library
+        [Option('u', "ubisoftplus", Required = false, HelpText = "Check Ubisoft+ subscription status.")]
+        public bool UbisoftPlus { get; set; }
     }
 
     [Verb("config", HelpText = "Configure application settings.")]
@@ -43,8 +47,6 @@ public class Program
     {
         [Option("set-api-key", Required = false, HelpText = "Sets API keys (ITAD, IGDB). Format: --set-api-key ITAD=<your_key>")]
         public string? SetApiKey { get; set; }
-
-        // Future config options can be added here
     }
 
     static async Task Main(string[] args)
@@ -67,10 +69,12 @@ public class Program
             {
                 services.AddTransient<SteamAuthService>();
                 services.AddTransient<XboxAuthService>();
-                services.AddTransient<EaAuthService>(); // Register EaAuthService
+                services.AddTransient<EaAuthService>();
+                services.AddTransient<UbisoftAuthService>();
                 services.AddTransient<SteamWishlistService>(); 
                 services.AddTransient<XboxDataService>(); 
-                services.AddTransient<EaDataService>(); // Register EaDataService
+                services.AddTransient<EaDataService>(); 
+                services.AddTransient<UbisoftDataService>();
                 services.AddSingleton<ConfigService>(); 
                 services.AddTransient<ItadApiService>(); 
             });
@@ -151,6 +155,28 @@ public class Program
                  return 1;
              }
         }
+        else if (opts.Service.Equals("ubisoft", StringComparison.OrdinalIgnoreCase))
+        {
+             var ubiAuth = services.GetRequiredService<UbisoftAuthService>();
+             try
+             {
+                 var status = await ubiAuth.LoginAsync();
+                 if (status == "UbisoftLoggedIn")
+                 {
+                    Console.WriteLine("Ubisoft authentication completed.");
+                 }
+                 else
+                 {
+                    Console.WriteLine("Ubisoft authentication failed.");
+                    return 1;
+                 }
+             }
+             catch (Exception ex)
+             {
+                 Console.WriteLine($"Ubisoft authentication failed: {ex.Message}");
+                 return 1;
+             }
+        }
         else
         {
              Console.WriteLine("Unknown service.");
@@ -166,7 +192,6 @@ public class Program
         {
             Console.WriteLine("Synchronizing wishlist...");
             
-            // Check for Steam cookie file existence
             var authTokensPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LegionDeck", "AuthTokens");
             var steamCookieFilePath = Path.Combine(authTokensPath, "steam_cookies.json");
 
@@ -179,7 +204,6 @@ public class Program
             var steamWishlistService = new SteamWishlistService(); 
             var itadService = services.GetRequiredService<ItadApiService>();
             
-            // Pass null to trigger auto-detection of the logged-in user's profile
             var wishlistItems = await steamWishlistService.GetWishlistAsync(null);
 
             if (wishlistItems.Count == 0)
@@ -202,32 +226,31 @@ public class Program
 
             var gamePlainIds = new List<string>();
             var itemProcessingTasks = new List<Task>();
-            var semaphore = new SemaphoreSlim(5); // Limit to 5 concurrent API calls
+            var semaphore = new SemaphoreSlim(5); 
 
             foreach (var item in wishlistItems)
             {
                 itemProcessingTasks.Add(Task.Run(async () =>
                 {
-                    await semaphore.WaitAsync(); // Wait for a slot in the semaphore
+                    await semaphore.WaitAsync(); 
                     try
                     {
                         var gameName = await steamWishlistService.GetAppDetailsAsync(item.AppId);
                         if (gameName == null)
                         {
-                            gameName = $"AppID {item.AppId}"; // Fallback to AppID if name not found
+                            gameName = $"AppID {item.AppId}"; 
                         }
-                        item.Name = gameName; // Update item with actual name
+                        item.Name = gameName; 
 
-                        var plainId = await itadService.GetPlainIdAsync(item.Name);
-                        if (plainId != null)
+                        var plainIds = await itadService.GetPlainIdsAsync(item.Name);
+                        if (plainIds != null && plainIds.Any())
                         {
-                            item.PlainId = plainId; // Store PlainId in the item
-                            // Note: gamePlainIds will be populated after all tasks complete to avoid thread-safety issues
+                            item.PlainIds.AddRange(plainIds); 
                         }
                     }
                     finally
                     {
-                        semaphore.Release(); // Release the slot
+                        semaphore.Release(); 
                     }
                 }));
             }
@@ -235,12 +258,11 @@ public class Program
 
             await Task.WhenAll(itemProcessingTasks);
 
-            // Populate gamePlainIds after all items have been processed
             foreach (var item in wishlistItems)
             {
-                if (item.PlainId != null)
+                if (item.PlainIds.Any())
                 {
-                    gamePlainIds.Add(item.PlainId);
+                    gamePlainIds.AddRange(item.PlainIds);
                 }
             }
 
@@ -248,7 +270,26 @@ public class Program
             var subscriptionStatuses = new Dictionary<string, List<string>>();
             if (gamePlainIds.Count > 0)
             {
-                subscriptionStatuses = await itadService.IsOnSubscriptionAsync(gamePlainIds);
+                // Remove duplicates and invalid IDs to minimize API load and errors
+                gamePlainIds = gamePlainIds.Where(id => !string.IsNullOrWhiteSpace(id)).Distinct().ToList();
+                
+                const int batchSize = 20;
+                for (int i = 0; i < gamePlainIds.Count; i += batchSize)
+                {
+                    var batch = gamePlainIds.Skip(i).Take(batchSize).ToList();
+                    try 
+                    {
+                        var batchResults = await itadService.IsOnSubscriptionAsync(batch);
+                        foreach (var kvp in batchResults)
+                        {
+                            subscriptionStatuses[kvp.Key] = kvp.Value;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"[Error] Failed to fetch subscription status for batch starting at index {i}: {ex.Message}");
+                    }
+                }
             }
 
             // Check User's Game Pass Status
@@ -262,6 +303,11 @@ public class Program
             var userEaPlayStatus = await eaDataService.GetEaPlaySubscriptionDetailsAsync();
             bool userHasEaPlayAccess = userEaPlayStatus.Contains("EA Play", StringComparison.OrdinalIgnoreCase);
 
+            // Check User's Ubisoft+ Status
+            var ubisoftDataService = services.GetRequiredService<UbisoftDataService>();
+            var userUbisoftPlusStatus = await ubisoftDataService.GetUbisoftPlusSubscriptionDetailsAsync();
+            bool userHasUbisoftPlusAccess = userUbisoftPlusStatus.Contains("Ubisoft+", StringComparison.OrdinalIgnoreCase);
+
 
             if (userHasGamePassAccess)
             {
@@ -271,17 +317,31 @@ public class Program
             {
                 Console.WriteLine($"[Subscription Check] Active: {userEaPlayStatus} - Checking for free games...");
             }
+            if (userHasUbisoftPlusAccess)
+            {
+                Console.WriteLine($"[Subscription Check] Active: {userUbisoftPlusStatus} - Checking for free games...");
+            }
 
 
             foreach (var item in wishlistItems)
             {
                 string statusMessage;
-
-                if (item.PlainId != null && subscriptionStatuses.TryGetValue(item.PlainId, out List<string>? activeSubs) && activeSubs != null && activeSubs.Any())
+                
+                var activeSubs = new List<string>();
+                foreach (var pid in item.PlainIds)
                 {
-                    // Check if Game Pass is one of the active subscriptions for this game
+                    if (subscriptionStatuses.TryGetValue(pid, out var subs) && subs != null)
+                    {
+                        activeSubs.AddRange(subs);
+                    }
+                }
+                activeSubs = activeSubs.Distinct().ToList();
+
+                if (activeSubs.Any())
+                {
                     bool isOnGamePass = activeSubs.Any(s => s.Contains("Game Pass", StringComparison.OrdinalIgnoreCase));
                     bool isOnEaPlay = activeSubs.Any(s => s.Contains("EA Play", StringComparison.OrdinalIgnoreCase));
+                    bool isOnUbisoftPlus = activeSubs.Any(s => s.Contains("Ubisoft+", StringComparison.OrdinalIgnoreCase) || s.Contains("Ubisoft Plus", StringComparison.OrdinalIgnoreCase));
                     
                     if (isOnGamePass)
                     {
@@ -294,13 +354,12 @@ public class Program
                             statusMessage = "Available on Game Pass (Subscription required)";
                         }
                         
-                        // Append other subs if any
-                        var otherSubs = activeSubs.Where(s => !s.Contains("Game Pass", StringComparison.OrdinalIgnoreCase) && !s.Contains("EA Play", StringComparison.OrdinalIgnoreCase)).ToList();
-                        if (isOnEaPlay && userHasEaPlayAccess)
-                        {
-                             statusMessage += " & EA Play!"; // If both free, just append
-                        }
-                        else if (otherSubs.Any())
+                        var otherSubs = activeSubs.Where(s => !s.Contains("Game Pass", StringComparison.OrdinalIgnoreCase) && !s.Contains("EA Play", StringComparison.OrdinalIgnoreCase) && !s.Contains("Ubisoft", StringComparison.OrdinalIgnoreCase)).ToList();
+                        
+                        if (isOnEaPlay && userHasEaPlayAccess) statusMessage += " & EA Play!";
+                        if (isOnUbisoftPlus && userHasUbisoftPlusAccess) statusMessage += " & Ubisoft+!";
+                        
+                        if (otherSubs.Any())
                         {
                             statusMessage += $" (Also on: {string.Join(", ", otherSubs)})";
                         }
@@ -316,8 +375,26 @@ public class Program
                             statusMessage = "Available on EA Play (Subscription required)";
                         }
 
-                        // Append other subs if any
-                        var otherSubs = activeSubs.Where(s => !s.Contains("EA Play", StringComparison.OrdinalIgnoreCase)).ToList();
+                        if (isOnUbisoftPlus && userHasUbisoftPlusAccess) statusMessage += " & Ubisoft+!";
+
+                        var otherSubs = activeSubs.Where(s => !s.Contains("EA Play", StringComparison.OrdinalIgnoreCase) && !s.Contains("Ubisoft", StringComparison.OrdinalIgnoreCase)).ToList();
+                        if (otherSubs.Any())
+                        {
+                            statusMessage += $" (Also on: {string.Join(", ", otherSubs)})";
+                        }
+                    }
+                    else if (isOnUbisoftPlus)
+                    {
+                        if (userHasUbisoftPlusAccess)
+                        {
+                            statusMessage = "*** FREE via Ubisoft+! ***";
+                        }
+                        else
+                        {
+                            statusMessage = "Available on Ubisoft+ (Subscription required)";
+                        }
+                        
+                        var otherSubs = activeSubs.Where(s => !s.Contains("Ubisoft", StringComparison.OrdinalIgnoreCase)).ToList();
                         if (otherSubs.Any())
                         {
                             statusMessage += $" (Also on: {string.Join(", ", otherSubs)})";
@@ -372,6 +449,25 @@ public class Program
             else
             {
                 Console.WriteLine("No active EA Play subscription detected.");
+            }
+        }
+        else if (opts.UbisoftPlus)
+        {
+            Console.WriteLine("Checking Ubisoft+ subscription status...");
+            var ubisoftDataService = services.GetRequiredService<UbisoftDataService>();
+            var subscriptionType = await ubisoftDataService.GetUbisoftPlusSubscriptionDetailsAsync();
+
+            if (subscriptionType.StartsWith("Error"))
+            {
+                Console.WriteLine($"Could not determine subscription status. {subscriptionType}");
+            }
+            else if (subscriptionType != "None")
+            {
+                Console.WriteLine($"You have an active subscription: {subscriptionType}");
+            }
+            else
+            {
+                Console.WriteLine("No active Ubisoft+ subscription detected.");
             }
         }
         return 0;

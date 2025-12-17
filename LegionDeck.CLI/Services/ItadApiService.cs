@@ -3,11 +3,10 @@ using System.Collections.Generic;
 using System.Net.Http;
 using System.Text.Json;
 using System.Threading.Tasks;
-using System.Web; // For HttpUtility.UrlEncode
-using LegionDeck.CLI.Models; // For SteamWishlistItem, potentially other game models
-using LegionDeck.CLI.Services; // For ConfigService
-
+using System.Web;
+using LegionDeck.CLI.Services; 
 using System.Text.Json.Serialization; 
+using System.Linq;
 
 namespace LegionDeck.CLI.Services;
 
@@ -24,11 +23,8 @@ public class ItadApiService
         _apiKey = _configService.GetApiKey("ITAD") ?? throw new InvalidOperationException("ITAD API key is not configured.");
         _httpClient = new HttpClient();
         _httpClient.DefaultRequestHeaders.Add("User-Agent", "LegionDeck CLI/1.0");
-        // Removed X-Api-Key header as per Node.js client observation
     }
 
-    // ITAD API models will go here
-    // First, a model to hold ITAD's internal game ID (plain) - v1 API returns a direct list
     public class ItadGameLookupResult : List<ItadGameLookupItem>
     {
     }
@@ -36,48 +32,40 @@ public class ItadApiService
     public class ItadGameLookupItem
     {
         public string? Title { get; set; }
-        [JsonPropertyName("id")] // Map 'id' (UUID) from API response to 'Plain' property
-        public string? Plain { get; set; } // ITAD's internal game identifier (now mapped from id)
-    }
-
-    // Models for games/subs/v1
-    public class ItadSubsResult : List<ItadGameSubscription>
-    {
+        [JsonPropertyName("id")] 
+        public string? Plain { get; set; } 
     }
 
     public class ItadGameSubscription
     {
-        [JsonPropertyName("id")] // Explicitly map 'id' from JSON to this property
-        public string? Id { get; set; } // The game's plain ID (UUID)
-        [JsonPropertyName("subs")] // Explicitly map 'subs' from JSON to this property
+        [JsonPropertyName("id")] 
+        public string? Id { get; set; } 
+        [JsonPropertyName("subs")] 
         public List<ItadSubscription>? Subs { get; set; }
     }
 
     public class ItadSubscription
     {
-        public int Id { get; set; } // ID of the subscription service
-        [JsonPropertyName("name")] // Explicitly map 'name' from JSON to this property
-        public string? Name { get; set; } // e.g., "Game Pass"
-        [JsonPropertyName("leaving")] // Explicitly map 'leaving' from JSON to this property
-        public string? Leaving { get; set; } // Date leaving subscription
+        public int Id { get; set; } 
+        [JsonPropertyName("name")] 
+        public string? Name { get; set; } 
+        [JsonPropertyName("leaving")] 
+        public string? Leaving { get; set; } 
     }
 
     private string CleanGameTitle(string title)
     {
-        // Remove common special characters and trademark symbols
         title = title.Replace("®", "").Replace("™", "").Replace("©", "");
-        // Remove anything that's not alphanumeric or space
         title = System.Text.RegularExpressions.Regex.Replace(title, @"[^a-zA-Z0-9\s]", "");
-        // Replace multiple spaces with a single space
         title = System.Text.RegularExpressions.Regex.Replace(title, @"\s+", " ").Trim();
         return title;
     }
 
-    public async Task<string?> GetPlainIdAsync(string title)
+    public async Task<List<string>> GetPlainIdsAsync(string title)
     {
         var cleanedTitle = CleanGameTitle(title);
         var encodedTitle = HttpUtility.UrlEncode(cleanedTitle);
-        var url = $"{BaseUrl}games/search/v1?key={_apiKey}&title={encodedTitle}&limit=1"; // Reverted limit to 1
+        var url = $"{BaseUrl}games/search/v1?key={_apiKey}&title={encodedTitle}&limit=5"; 
         
         try
         {
@@ -86,21 +74,21 @@ public class ItadApiService
 
             if (result == null || result.Count == 0)
             {
-                Console.WriteLine($"[Error] Game '{title}' not found on ITAD.");
-                return null;
+                return new List<string>();
             }
-            // Simplified to take the first result, as it's the most relevant with limit=1
-            return result.FirstOrDefault()?.Plain;
+            
+            // Return all found plains (Simple approach to ensure we catch everything, accepting some false positives like Squad -> Squad 44)
+            return result.Where(x => x.Plain != null).Select(x => x.Plain!).ToList();
         }
         catch (HttpRequestException ex)
         {
             Console.WriteLine($"[Error] ITAD API request failed for '{title}': {ex.Message}");
-            return null;
+            return new List<string>();
         }
         catch (JsonException ex)
         {
             Console.WriteLine($"[Error] Failed to parse ITAD game lookup for '{title}': {ex.Message}");
-            return null;
+            return new List<string>();
         }
     }
 
@@ -133,7 +121,7 @@ public class ItadApiService
                     {
                         foreach (var sub in gameSubscription.Subs)
                         {
-                            if (sub.Leaving == null) // Check if the subscription is currently active
+                            if (sub.Leaving == null) 
                             {
                                 activeSubscriptions.Add(sub.Name ?? "Unknown Subscription");
                             }
@@ -147,23 +135,19 @@ public class ItadApiService
         }
         catch (HttpRequestException ex)
         {
-            Console.WriteLine($"[Error] ITAD API POST request failed for plains '{string.Join(", ", plains)}' subscription: {ex.Message}");
-            if (ex.StatusCode.HasValue)
-            {
-                Console.WriteLine($"[Debug] HTTP Status Code: {ex.StatusCode.Value}");
-            }
+            Console.WriteLine($"[Error] ITAD API POST request failed for plains batch: {ex.Message}");
             foreach (var plainId in plains)
             {
-                subscriptionStatus[plainId] = new List<string> { "Error" }; // Indicate error
+                subscriptionStatus[plainId] = new List<string> { "Error" }; 
             }
             return subscriptionStatus;
         }
         catch (JsonException ex)
         {
-            Console.WriteLine($"[Error] Failed to parse ITAD subscription info for plains '{string.Join(", ", plains)}': {ex.Message}");
+            Console.WriteLine($"[Error] Failed to parse ITAD subscription info: {ex.Message}");
             foreach (var plainId in plains)
             {
-                subscriptionStatus[plainId] = new List<string> { "Error" }; // Indicate error
+                subscriptionStatus[plainId] = new List<string> { "Error" }; 
             }
             return subscriptionStatus;
         }
