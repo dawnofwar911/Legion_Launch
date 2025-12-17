@@ -44,6 +44,51 @@ public class SteamAuthService : IAuthService
         return tcs.Task;
     }
 
+    public async Task<bool> RefreshSessionAsync()
+    {
+        var tcs = new TaskCompletionSource<string?>();
+
+        var thread = new Thread(() =>
+        {
+            try
+            {
+                Application.SetHighDpiMode(HighDpiMode.SystemAware);
+                Application.EnableVisualStyles();
+                Application.SetCompatibleTextRenderingDefault(false);
+
+                // Use the new silent parameter
+                var form = new SteamLoginForm(tcs, null, silent: true); 
+                Application.Run(form);
+            }
+            catch (Exception ex)
+            {
+                tcs.TrySetException(ex);
+            }
+        });
+
+        thread.SetApartmentState(ApartmentState.STA);
+        thread.Start();
+
+        // Wait for result with timeout
+        var completedTask = await Task.WhenAny(tcs.Task, Task.Delay(15000)); // 15s timeout
+        if (completedTask == tcs.Task)
+        {
+            try 
+            {
+                var result = await tcs.Task;
+                return result == "SteamLoggedIn";
+            }
+            catch
+            {
+                return false;
+            }
+        }
+        else
+        {
+             return false;
+        }
+    }
+
     public static async Task<(string pageContent, string finalUrl)> FetchProtectedPageAsync(string url, string cookieJsonPath)
     {
         // Attempt to fetch directly with HttpClient if cookies exist
@@ -54,7 +99,7 @@ public class SteamAuthService : IAuthService
                 var cookieContainer = new CookieContainer();
                 var handler = new HttpClientHandler { CookieContainer = cookieContainer };
                 using var httpClient = new HttpClient(handler);
-                httpClient.DefaultRequestHeaders.Add("User-Agent", "LegionDeck CLI/1.0"); // Use a consistent User-Agent
+                httpClient.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"); // Use a consistent User-Agent matching WebView2
 
                 // Load cookies from JSON and inject into CookieContainer
                 var json = await File.ReadAllTextAsync(cookieJsonPath);
@@ -134,16 +179,25 @@ public class SteamLoginForm : Form
     private readonly TaskCompletionSource<(string pageContent, string finalUrl)>? _fetchResultTcs;
     private readonly string _targetUrl;
     private readonly string? _cookieJsonPath; 
+    private readonly bool _isSilent;
     private WebView2 _webView = new WebView2(); // Initialize here
 
     // Constructor for Login Mode
-    public SteamLoginForm(TaskCompletionSource<string?> loginTcs, string? initialUrl)
+    public SteamLoginForm(TaskCompletionSource<string?> loginTcs, string? initialUrl, bool silent = false)
     {
         _loginResultTcs = loginTcs;
         _targetUrl = initialUrl ?? "https://steamcommunity.com/login/home/?goto=";
         _cookieJsonPath = null; 
+        _isSilent = silent;
         InitializeComponentCommon();
         this.Text = "Steam Login - LegionDeck";
+        
+        if (_isSilent)
+        {
+            this.ShowInTaskbar = false;
+            this.WindowState = FormWindowState.Minimized;
+            this.Opacity = 0;
+        }
     }
 
     // Constructor for Fetch Mode
@@ -153,6 +207,7 @@ public class SteamLoginForm : Form
         _targetUrl = targetUrl;
         _fetchResultTcs = fetchTcs;
         _cookieJsonPath = cookieJsonPath; 
+        _isSilent = true;
         InitializeComponentCommon();
         this.Text = "LegionDeck - Fetching Data...";
         this.WindowState = FormWindowState.Minimized; // Revert to minimized
@@ -230,16 +285,20 @@ public class SteamLoginForm : Form
 
             if (_fetchResultTcs == null) // Login Mode
             {
-                // Clear old cookies to ensure a clean login, only for Login mode
-                var cookieManager = _webView.CoreWebView2.CookieManager;
-                cookieManager.DeleteCookiesWithDomainAndPath("steamcommunity.com", "/", null);
-                cookieManager.DeleteCookiesWithDomainAndPath(".steamcommunity.com", "/", null);
-                cookieManager.DeleteCookiesWithDomainAndPath("steampowered.com", "/", null);
-                cookieManager.DeleteCookiesWithDomainAndPath(".steampowered.com", "/", null);
-                cookieManager.DeleteCookiesWithDomainAndPath("store.steampowered.com", "/", null);
-                cookieManager.DeleteCookiesWithDomainAndPath(".store.steampowered.com", "/", null);
-                cookieManager.DeleteCookiesWithDomainAndPath("help.steampowered.com", "/", null);
-                cookieManager.DeleteCookiesWithDomainAndPath("login.steampowered.com", "/", null);
+                // Clear old cookies to ensure a clean login, only for INTERACTIVE Login mode.
+                // If Silent (Refresh), we want to KEEP cookies to try and auto-login.
+                if (!_isSilent)
+                {
+                    var cookieManager = _webView.CoreWebView2.CookieManager;
+                    cookieManager.DeleteCookiesWithDomainAndPath("steamcommunity.com", "/", null);
+                    cookieManager.DeleteCookiesWithDomainAndPath(".steamcommunity.com", "/", null);
+                    cookieManager.DeleteCookiesWithDomainAndPath("steampowered.com", "/", null);
+                    cookieManager.DeleteCookiesWithDomainAndPath(".steampowered.com", "/", null);
+                    cookieManager.DeleteCookiesWithDomainAndPath("store.steampowered.com", "/", null);
+                    cookieManager.DeleteCookiesWithDomainAndPath(".store.steampowered.com", "/", null);
+                    cookieManager.DeleteCookiesWithDomainAndPath("help.steampowered.com", "/", null);
+                    cookieManager.DeleteCookiesWithDomainAndPath("login.steampowered.com", "/", null);
+                }
             }
             
             
@@ -388,19 +447,79 @@ public class SteamLoginForm : Form
             
             if (loginCookie != null)
             {
-                Console.WriteLine($"[Auth Stage 1] Logged in on Community. Syncing to Store...");
+                Console.WriteLine($"[Auth Stage 1] Logged in on Community. Extracting and Saving Cookies.");
+                
+                // Retrieve all cookies from both domains after successful login on community
+                var communityCookies = await cookieManager.GetCookiesAsync("https://steamcommunity.com");
+                var storeCookies = await cookieManager.GetCookiesAsync("https://store.steampowered.com");
+                
+                var allCookies = communityCookies.Concat(storeCookies)
+                                                 .GroupBy(c => c.Name + c.Domain) 
+                                                 .Select(g => g.First())
+                                                 .ToList();
 
-                // Log all cookies before navigating to dynamicstore/userdata/
-                var storeCookiesDebug = await cookieManager.GetCookiesAsync("https://store.steampowered.com");
-                var communityCookiesDebug = await cookieManager.GetCookiesAsync("https://steamcommunity.com");
+                var cookieData = allCookies.Select(c => new 
+                { 
+                    c.Name, c.Value, c.Domain, c.Path, c.Expires, c.IsSecure, c.IsHttpOnly 
+                }).ToList();
 
-                Console.WriteLine("[Debug] Cookies before dynamicstore/userdata/ navigation:");
-                foreach (var c in communityCookiesDebug.Concat(storeCookiesDebug))
+                var json = JsonSerializer.Serialize(cookieData, new JsonSerializerOptions { WriteIndented = true });
+
+                var authTokensPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LegionDeck", "AuthTokens");
+                Directory.CreateDirectory(authTokensPath);
+                await File.WriteAllTextAsync(Path.Combine(authTokensPath, "steam_cookies.json"), json);
+                Console.WriteLine($"Steam cookies saved to: {Path.Combine(authTokensPath, "steam_cookies.json")}");
+
+                _loginResultTcs?.TrySetResult("SteamLoggedIn");
+                this.Close();
+                return; // Exit after successful login
+            }
+            else if (_isSilent)
+            {
+                 // If silent and no login cookie on community, we are likely not logged in.
+                 Console.WriteLine("[Silent Refresh] steamLoginSecure not found on Community. Session invalid.");
+                 _loginResultTcs?.TrySetResult("NeedsLogin");
+                 this.Close();
+                 return;
+            }
+
+            // If not logged in on community, continue with navigation to store to ensure session is fully established for this API
+            if (_webView.Source.Host.Contains("store.steampowered.com"))
+            {
+                 // Stage 2.5: Navigate to dynamicstore/userdata to ensure session is fully established for this API
+                if (!_webView.Source.ToString().Contains("/dynamicstore/userdata/"))
                 {
-                    Console.WriteLine($"[Debug]   Cookie: {c.Name}={c.Value} (Domain: {c.Domain}, Path: {c.Path}, Expires: {c.Expires}, Secure: {c.IsSecure}, HttpOnly: {c.IsHttpOnly})");
+                    Console.WriteLine($"[Auth Stage 2.5] Navigating to dynamicstore/userdata/ to finalize session.");
+                    await Task.Delay(5000); // Wait for 5 seconds to ensure all cookies are set
+                    _webView.Source = new Uri("https://store.steampowered.com/dynamicstore/userdata/");
+                    return; // Wait for next NavigationCompleted event
                 }
 
-                _webView.Source = new Uri("https://store.steampowered.com/");
+                // Stage 3: We are on dynamicstore/userdata/, session should be complete
+                Console.WriteLine($"[Auth Stage 3] Session fully established on dynamicstore/userdata/.");
+
+                // If _loginResultTcs is still active and we reach here, it means we didn't find steamLoginSecure on community,
+                // but perhaps the user logged in directly on store.steampowered.com or another path
+                var allStoreCookies = await cookieManager.GetCookiesAsync("https://store.steampowered.com");
+                if (allStoreCookies.Any(c => c.Name == "steamLoginSecure"))
+                {
+                    Console.WriteLine($"[Auth Success] Retrieved steamLoginSecure from Store.");
+                    
+                    var cookieData = allStoreCookies.Select(c => new 
+                    { 
+                        c.Name, c.Value, c.Domain, c.Path, c.Expires, c.IsSecure, c.IsHttpOnly 
+                    }).ToList();
+
+                    var json = JsonSerializer.Serialize(cookieData, new JsonSerializerOptions { WriteIndented = true });
+
+                    var authTokensPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LegionDeck", "AuthTokens");
+                    Directory.CreateDirectory(authTokensPath);
+                    await File.WriteAllTextAsync(Path.Combine(authTokensPath, "steam_cookies.json"), json);
+                    Console.WriteLine($"Steam cookies saved to: {Path.Combine(authTokensPath, "steam_cookies.json")}");
+
+                    _loginResultTcs?.TrySetResult("SteamLoggedIn");
+                    this.Close();
+                }
             }
         }
     }

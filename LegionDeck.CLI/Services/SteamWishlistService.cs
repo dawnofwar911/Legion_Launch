@@ -68,6 +68,12 @@ public class SteamWishlistService
                             Name = $"AppID {appId}" 
                         });
                     }
+
+                    if (wishlist.Count == 0)
+                    {
+                        Console.WriteLine("[Debug] rgWishlist array was empty.");
+                        Console.WriteLine($"[Debug] Full processed response: {processedResponse}");
+                    }
                 }
             }
 

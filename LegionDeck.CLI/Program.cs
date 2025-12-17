@@ -151,6 +151,22 @@ public class Program
             // Pass null to trigger auto-detection of the logged-in user's profile
             var wishlistItems = await steamWishlistService.GetWishlistAsync(null);
 
+            if (wishlistItems.Count == 0)
+            {
+                 Console.WriteLine("Wishlist appears empty or session is stale. Attempting to refresh session...");
+                 var steamAuth = services.GetRequiredService<SteamAuthService>();
+                 var refreshed = await steamAuth.RefreshSessionAsync();
+                 if (refreshed)
+                 {
+                     Console.WriteLine("Session refreshed. Retrying sync...");
+                     wishlistItems = await steamWishlistService.GetWishlistAsync(null);
+                 }
+                 else
+                 {
+                     Console.WriteLine("Session refresh failed. Please run 'legion auth --service steam' to login interactively.");
+                 }
+            }
+
             Console.WriteLine($"Found {wishlistItems.Count} items in Steam Wishlist:");
 
             var gamePlainIds = new List<string>();
@@ -198,7 +214,11 @@ public class Program
             }
 
             // Batched call to check subscription status
-            var subscriptionStatuses = await itadService.IsOnSubscriptionAsync(gamePlainIds);
+            var subscriptionStatuses = new Dictionary<string, List<string>>();
+            if (gamePlainIds.Count > 0)
+            {
+                subscriptionStatuses = await itadService.IsOnSubscriptionAsync(gamePlainIds);
+            }
 
             foreach (var item in wishlistItems)
             {
