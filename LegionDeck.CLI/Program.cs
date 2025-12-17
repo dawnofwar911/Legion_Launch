@@ -29,6 +29,9 @@ public class Program
         [Option('w', "wishlist", Required = false, HelpText = "Synchronize wishlist data.")]
         public bool Wishlist { get; set; }
 
+        [Option('g', "gamepass", Required = false, HelpText = "Check Xbox Game Pass subscription status.")]
+        public bool GamePass { get; set; }
+
         // Add other sync options here as needed, e.g., --library
     }
 
@@ -62,6 +65,7 @@ public class Program
                 services.AddTransient<SteamAuthService>();
                 services.AddTransient<XboxAuthService>();
                 services.AddTransient<SteamWishlistService>(); 
+                services.AddTransient<XboxDataService>(); // Register XboxDataService
                 services.AddSingleton<ConfigService>(); // ConfigService is a singleton as it manages persistent state
                 services.AddTransient<ItadApiService>(); // Register ItadApiService
             });
@@ -234,6 +238,25 @@ public class Program
                 }
                 
                 Console.WriteLine($"- {item.Name} (AppId: {item.AppId}) - Status: {statusMessage}");
+            }
+        }
+        else if (opts.GamePass)
+        {
+            Console.WriteLine("Checking Xbox Game Pass subscription status...");
+            var xboxDataService = services.GetRequiredService<XboxDataService>();
+            var subscriptionType = await xboxDataService.GetGamePassSubscriptionDetailsAsync();
+
+            if (subscriptionType.StartsWith("Error"))
+            {
+                Console.WriteLine($"Could not determine subscription status. {subscriptionType}");
+            }
+            else if (subscriptionType != "None")
+            {
+                Console.WriteLine($"You have an active subscription: {subscriptionType}");
+            }
+            else
+            {
+                Console.WriteLine("No active Xbox Game Pass subscription detected.");
             }
         }
         return 0;
