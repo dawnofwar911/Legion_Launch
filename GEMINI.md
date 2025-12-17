@@ -89,7 +89,13 @@ Xbox: ms-xbl-number:// or xbox://
 
 Epic: com.epicgames.launcher://
 
-6. Current Context / Active Task
+6. Environment & Build Notes
+- Preferred Build Command: `dotnet build LegionDeck.sln -p:Platform=x64`
+- Preferred Executable Path: `LegionDeck.GUI\bin\x64\Debug\net8.0-windows10.0.19041.0\LegionDeck.GUI.exe`
+- Note: Avoid using the `win-x64\publish` or `win-x64` subfolders for daily testing, as binaries there are frequently blocked by Windows 11 "Smart App Control". The main Debug folder bypasses this more reliably.
+- Troubleshooting: If the app crashes on launch, check `%LOCALAPPDATA%\LegionDeck\startup.log`.
+
+7. Current Context / Active Task
 Status: Phase 2 Development.
 Next Action: Implement Controller Navigation (XInput) and Visual Polish for the Handheld UI.
 
