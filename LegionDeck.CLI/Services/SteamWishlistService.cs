@@ -53,7 +53,7 @@ public class SteamWishlistService
             }
             else // It looks like JSON, try to parse
             {
-                Console.WriteLine($"[Debug] Dynamic Store processedResponse (full): {processedResponse.Substring(0, Math.Min(processedResponse.Length, 500))}"); 
+ 
                 
                 using var doc = JsonDocument.Parse(processedResponse);
                 if (doc.RootElement.TryGetProperty("rgWishlist", out var rgWishlist))

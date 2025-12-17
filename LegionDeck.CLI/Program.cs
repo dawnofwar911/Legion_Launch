@@ -154,21 +154,46 @@ public class Program
             Console.WriteLine($"Found {wishlistItems.Count} items in Steam Wishlist:");
 
             var gamePlainIds = new List<string>();
+            var itemProcessingTasks = new List<Task>();
+            var semaphore = new SemaphoreSlim(5); // Limit to 5 concurrent API calls
 
             foreach (var item in wishlistItems)
             {
-                var gameName = await steamWishlistService.GetAppDetailsAsync(item.AppId);
-                if (gameName == null)
+                itemProcessingTasks.Add(Task.Run(async () =>
                 {
-                    gameName = $"AppID {item.AppId}"; // Fallback to AppID if name not found
-                }
-                item.Name = gameName; // Update item with actual name
+                    await semaphore.WaitAsync(); // Wait for a slot in the semaphore
+                    try
+                    {
+                        var gameName = await steamWishlistService.GetAppDetailsAsync(item.AppId);
+                        if (gameName == null)
+                        {
+                            gameName = $"AppID {item.AppId}"; // Fallback to AppID if name not found
+                        }
+                        item.Name = gameName; // Update item with actual name
 
-                var plainId = await itadService.GetPlainIdAsync(item.Name);
-                if (plainId != null)
+                        var plainId = await itadService.GetPlainIdAsync(item.Name);
+                        if (plainId != null)
+                        {
+                            item.PlainId = plainId; // Store PlainId in the item
+                            // Note: gamePlainIds will be populated after all tasks complete to avoid thread-safety issues
+                        }
+                    }
+                    finally
+                    {
+                        semaphore.Release(); // Release the slot
+                    }
+                }));
+            }
+
+
+            await Task.WhenAll(itemProcessingTasks);
+
+            // Populate gamePlainIds after all items have been processed
+            foreach (var item in wishlistItems)
+            {
+                if (item.PlainId != null)
                 {
-                    item.PlainId = plainId; // Store PlainId in the item
-                    gamePlainIds.Add(plainId);
+                    gamePlainIds.Add(item.PlainId);
                 }
             }
 

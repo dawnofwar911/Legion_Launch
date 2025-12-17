@@ -8,6 +8,10 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 using System.Text.Json;
 using System.Collections.Generic;
+using System.Net; // Added for HttpStatusCode and Cookie
+using System.Net.Http; // Added for HttpClientHandler
+using System.Net.Http.Headers; // Added for CookieContainer (though CookieContainer is in System.Net)
+using System.Web; // Added for HttpUtility
 
 namespace LegionDeck.CLI.Services;
 
@@ -40,10 +44,74 @@ public class SteamAuthService : IAuthService
         return tcs.Task;
     }
 
-    public static Task<(string pageContent, string finalUrl)> FetchProtectedPageAsync(string url, string cookieJsonPath) // This version takes cookieJsonPath
+    public static async Task<(string pageContent, string finalUrl)> FetchProtectedPageAsync(string url, string cookieJsonPath)
     {
+        // Attempt to fetch directly with HttpClient if cookies exist
+        if (File.Exists(cookieJsonPath))
+        {
+            try
+            {
+                var cookieContainer = new CookieContainer();
+                var handler = new HttpClientHandler { CookieContainer = cookieContainer };
+                using var httpClient = new HttpClient(handler);
+                httpClient.DefaultRequestHeaders.Add("User-Agent", "LegionDeck CLI/1.0"); // Use a consistent User-Agent
+
+                // Load cookies from JSON and inject into CookieContainer
+                var json = await File.ReadAllTextAsync(cookieJsonPath);
+                var cookiesJson = JsonSerializer.Deserialize<List<JsonElement>>(json);
+                
+                if (cookiesJson != null)
+                {
+                    foreach (var c in cookiesJson)
+                    {
+                        try
+                        {
+                            var name = c.GetProperty("Name").GetString();
+                            var value = c.GetProperty("Value").GetString();
+                            var domain = c.GetProperty("Domain").GetString();
+                            var path = c.GetProperty("Path").GetString() ?? "/";
+
+                            if (!string.IsNullOrEmpty(name) && !string.IsNullOrEmpty(value) && !string.IsNullOrEmpty(domain))
+                            {
+                                // Clean domain for CookieContainer.SetCookies
+                                string cleanedDomain = domain.StartsWith(".") ? domain.Substring(1) : domain;
+                                // URL-encode the cookie value to handle problematic characters like comma
+                                string encodedValue = HttpUtility.UrlEncode(value);
+                                cookieContainer.Add(new Uri($"https://{cleanedDomain}"), new Cookie(name, encodedValue, path, cleanedDomain));
+                            }
+                        }
+                        catch (Exception innerEx)
+                        {
+                            Console.WriteLine($"[Warning] Failed to inject specific cookie from JSON: {innerEx.Message}");
+                        }
+                    }
+                }
+
+                var request = new HttpRequestMessage(HttpMethod.Get, url);
+                var response = await httpClient.SendAsync(request);
+                
+                // Check for redirects to login page or other non-successful status
+                if (response.StatusCode == HttpStatusCode.OK && !response.RequestMessage!.RequestUri!.ToString().Contains("login"))
+                {
+                    var content = await response.Content.ReadAsStringAsync();
+                    // Basic check to see if content is likely what we expect (e.g., JSON for dynamicstore/userdata)
+                    if (url.Contains("dynamicstore/userdata/") && content.Trim().StartsWith("{") || !url.Contains("dynamicstore/userdata/"))
+                    {
+                        Console.WriteLine("[Debug] Successfully fetched protected page directly with HttpClient.");
+                        return (content, response.RequestMessage.RequestUri.ToString());
+                    }
+                }
+                Console.WriteLine($"[Debug] HttpClient direct fetch failed or redirected to login for {url}. Status: {response.StatusCode}. Falling back to WebView2.");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[Warning] HttpClient direct fetch failed: {ex.Message}. Falling back to WebView2.");
+            }
+        }
+
+        // Fallback to WebView2 if HttpClient direct fetch fails or cookies don't exist
         var tcs = new TaskCompletionSource<(string, string)>();
-        var thread = new Thread(() =>
+        await Task.Run(() =>
         {
             try
             {
@@ -56,9 +124,7 @@ public class SteamAuthService : IAuthService
             }
             catch (Exception ex) { tcs.TrySetException(ex); }
         });
-        thread.SetApartmentState(ApartmentState.STA);
-        thread.Start();
-        return tcs.Task;
+        return await tcs.Task;
     }
 }
 
