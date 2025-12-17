@@ -50,9 +50,39 @@ public class LocalLibraryService
     public List<InstalledGame> GetInstalledGames()
     {
         var allGames = new List<InstalledGame>();
-        allGames.AddRange(GetInstalledSteamGames());
-        allGames.AddRange(GetInstalledUbisoftGames());
+        try
+        {
+            Log("Starting Steam game scan");
+            allGames.AddRange(GetInstalledSteamGames());
+            Log($"Steam scan finished. Total games: {allGames.Count}");
+        }
+        catch (Exception ex)
+        {
+            Log($"Error scanning Steam games: {ex.Message}");
+        }
+
+        try
+        {
+            Log("Starting Ubisoft game scan");
+            allGames.AddRange(GetInstalledUbisoftGames());
+            Log($"Ubisoft scan finished. Total games: {allGames.Count}");
+        }
+        catch (Exception ex)
+        {
+            Log($"Error scanning Ubisoft games: {ex.Message}");
+        }
+        
         return allGames;
+    }
+
+    private void Log(string message)
+    {
+        try
+        {
+            var path = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LegionDeck", "startup.log");
+            File.AppendAllText(path, $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - [Core.LibraryService] {message}\n");
+        }
+        catch { }
     }
 
     public List<InstalledGame> GetInstalledSteamGames()
