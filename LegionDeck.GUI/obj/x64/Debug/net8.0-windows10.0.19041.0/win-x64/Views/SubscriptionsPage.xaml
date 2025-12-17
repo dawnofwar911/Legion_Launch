@@ -1,0 +1,19 @@
+﻿<?xml version="1.0" encoding="UTF-8" ?>
+<Page
+    x:Class="LegionDeck.GUI.Views.SubscriptionsPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d">
+
+    <StackPanel Padding="24" Spacing="12">
+        <TextBlock Text="Subscriptions" Style="{ThemeResource TitleTextBlockStyle}" />
+        <TextBlock Text="Check your active game subscriptions." Style="{ThemeResource BodyTextBlockStyle}" />
+        
+        <InfoBar x:ConnectionId='2' IsOpen="True" Severity="Informational" Title="Xbox Game Pass" Message="Checking status..." x:Name="XboxInfo" />
+        <InfoBar x:ConnectionId='3' IsOpen="True" Severity="Informational" Title="EA Play" Message="Checking status..." x:Name="EaInfo" />
+        <InfoBar x:ConnectionId='4' IsOpen="True" Severity="Informational" Title="Ubisoft+" Message="Checking status..." x:Name="UbiInfo" />
+    </StackPanel>
+</Page>
+

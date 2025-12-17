@@ -90,6 +90,18 @@ Xbox: ms-xbl-number:// or xbox://
 Epic: com.epicgames.launcher://
 
 6. Current Context / Active Task
-Status: Phase 1 Development.
+Status: Phase 2 Development.
+Next Action: Implement Controller Navigation (XInput) and Visual Polish for the Handheld UI.
 
-Next Action: Integrate Xbox Game Pass status checking with Steam Wishlist results.
+Roadmap Progress:
+[x] Phase 1: The Brain (CLI) - COMPLETE
+[x] Step 1: Scaffolding (Shared Core Library)
+[x] Step 2: Authentication (Moved to Core)
+[x] Step 3: Data Ingestion (Moved to Core)
+[x] Step 4: The Oracle (Moved to Core)
+[x] Step 5: Output (CLI functional and verified)
+
+[ ] Phase 2: The Face (GUI) - IN PROGRESS
+[x] Step 1: Port logic to WinUI 3 (Self-contained, Shared Core).
+[ ] Step 2: Design "Grid View" with Controller Navigation (XInput).
+[ ] Step 3: Implement "Badges" (Green for Game Pass, Red for EA).

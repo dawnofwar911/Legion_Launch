@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "LegionDeck.GUI (Package)": {
+      "commandName": "MsixPackage"
+    },
+    "LegionDeck.GUI (Unpackaged)": {
+      "commandName": "Project"
+    }
+  }
+}

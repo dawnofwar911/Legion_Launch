@@ -1,0 +1,14 @@
+C:\Git Repos\Legion_Launch\LegionDeck.Core\bin\x64\Debug\net8.0-windows\runtimes\win-x64\native\WebView2Loader.dll
+C:\Git Repos\Legion_Launch\LegionDeck.Core\bin\x64\Debug\net8.0-windows\LegionDeck.Core.deps.json
+C:\Git Repos\Legion_Launch\LegionDeck.Core\bin\x64\Debug\net8.0-windows\LegionDeck.Core.dll
+C:\Git Repos\Legion_Launch\LegionDeck.Core\bin\x64\Debug\net8.0-windows\LegionDeck.Core.pdb
+C:\Git Repos\Legion_Launch\LegionDeck.Core\obj\x64\Debug\net8.0-windows\LegionDeck.Core.csproj.AssemblyReference.cache
+C:\Git Repos\Legion_Launch\LegionDeck.Core\obj\x64\Debug\net8.0-windows\LegionDeck.Core.GeneratedMSBuildEditorConfig.editorconfig
+C:\Git Repos\Legion_Launch\LegionDeck.Core\obj\x64\Debug\net8.0-windows\LegionDeck.Core.AssemblyInfoInputs.cache
+C:\Git Repos\Legion_Launch\LegionDeck.Core\obj\x64\Debug\net8.0-windows\LegionDeck.Core.AssemblyInfo.cs
+C:\Git Repos\Legion_Launch\LegionDeck.Core\obj\x64\Debug\net8.0-windows\LegionDeck.Core.csproj.CoreCompileInputs.cache
+C:\Git Repos\Legion_Launch\LegionDeck.Core\obj\x64\Debug\net8.0-windows\LegionDeck.Core.sourcelink.json
+C:\Git Repos\Legion_Launch\LegionDeck.Core\obj\x64\Debug\net8.0-windows\LegionDeck.Core.dll
+C:\Git Repos\Legion_Launch\LegionDeck.Core\obj\x64\Debug\net8.0-windows\refint\LegionDeck.Core.dll
+C:\Git Repos\Legion_Launch\LegionDeck.Core\obj\x64\Debug\net8.0-windows\LegionDeck.Core.pdb
+C:\Git Repos\Legion_Launch\LegionDeck.Core\obj\x64\Debug\net8.0-windows\ref\LegionDeck.Core.dll
