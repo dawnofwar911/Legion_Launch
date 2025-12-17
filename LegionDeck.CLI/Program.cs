@@ -32,6 +32,9 @@ public class Program
         [Option('g', "gamepass", Required = false, HelpText = "Check Xbox Game Pass subscription status.")]
         public bool GamePass { get; set; }
 
+        [Option('e', "eaplay", Required = false, HelpText = "Check EA Play subscription status.")]
+        public bool EaPlay { get; set; }
+
         // Add other sync options here as needed, e.g., --library
     }
 
@@ -64,10 +67,12 @@ public class Program
             {
                 services.AddTransient<SteamAuthService>();
                 services.AddTransient<XboxAuthService>();
+                services.AddTransient<EaAuthService>(); // Register EaAuthService
                 services.AddTransient<SteamWishlistService>(); 
-                services.AddTransient<XboxDataService>(); // Register XboxDataService
-                services.AddSingleton<ConfigService>(); // ConfigService is a singleton as it manages persistent state
-                services.AddTransient<ItadApiService>(); // Register ItadApiService
+                services.AddTransient<XboxDataService>(); 
+                services.AddTransient<EaDataService>(); // Register EaDataService
+                services.AddSingleton<ConfigService>(); 
+                services.AddTransient<ItadApiService>(); 
             });
 
     static Task<int> RunOptions(Options opts)
@@ -121,6 +126,28 @@ public class Program
              catch (Exception ex)
              {
                  Console.WriteLine($"Xbox authentication failed: {ex.Message}");
+                 return 1;
+             }
+        }
+        else if (opts.Service.Equals("ea", StringComparison.OrdinalIgnoreCase))
+        {
+             var eaAuth = services.GetRequiredService<EaAuthService>();
+             try
+             {
+                 var status = await eaAuth.LoginAsync();
+                 if (status == "EALoggedIn")
+                 {
+                    Console.WriteLine("EA authentication completed.");
+                 }
+                 else
+                 {
+                    Console.WriteLine("EA authentication failed.");
+                    return 1;
+                 }
+             }
+             catch (Exception ex)
+             {
+                 Console.WriteLine($"EA authentication failed: {ex.Message}");
                  return 1;
              }
         }
@@ -230,10 +257,21 @@ public class Program
             bool userHasGamePassAccess = userGamePassStatus.Contains("Ultimate", StringComparison.OrdinalIgnoreCase) || 
                                          userGamePassStatus.Contains("PC", StringComparison.OrdinalIgnoreCase);
 
+            // Check User's EA Play Status
+            var eaDataService = services.GetRequiredService<EaDataService>();
+            var userEaPlayStatus = await eaDataService.GetEaPlaySubscriptionDetailsAsync();
+            bool userHasEaPlayAccess = userEaPlayStatus.Contains("EA Play", StringComparison.OrdinalIgnoreCase);
+
+
             if (userHasGamePassAccess)
             {
                 Console.WriteLine($"[Subscription Check] Active: {userGamePassStatus} - Checking for free games...");
             }
+            if (userHasEaPlayAccess)
+            {
+                Console.WriteLine($"[Subscription Check] Active: {userEaPlayStatus} - Checking for free games...");
+            }
+
 
             foreach (var item in wishlistItems)
             {
@@ -243,6 +281,7 @@ public class Program
                 {
                     // Check if Game Pass is one of the active subscriptions for this game
                     bool isOnGamePass = activeSubs.Any(s => s.Contains("Game Pass", StringComparison.OrdinalIgnoreCase));
+                    bool isOnEaPlay = activeSubs.Any(s => s.Contains("EA Play", StringComparison.OrdinalIgnoreCase));
                     
                     if (isOnGamePass)
                     {
@@ -256,7 +295,29 @@ public class Program
                         }
                         
                         // Append other subs if any
-                        var otherSubs = activeSubs.Where(s => !s.Contains("Game Pass", StringComparison.OrdinalIgnoreCase)).ToList();
+                        var otherSubs = activeSubs.Where(s => !s.Contains("Game Pass", StringComparison.OrdinalIgnoreCase) && !s.Contains("EA Play", StringComparison.OrdinalIgnoreCase)).ToList();
+                        if (isOnEaPlay && userHasEaPlayAccess)
+                        {
+                             statusMessage += " & EA Play!"; // If both free, just append
+                        }
+                        else if (otherSubs.Any())
+                        {
+                            statusMessage += $" (Also on: {string.Join(", ", otherSubs)})";
+                        }
+                    }
+                    else if (isOnEaPlay)
+                    {
+                        if (userHasEaPlayAccess)
+                        {
+                            statusMessage = "*** FREE via EA Play! ***";
+                        }
+                        else
+                        {
+                            statusMessage = "Available on EA Play (Subscription required)";
+                        }
+
+                        // Append other subs if any
+                        var otherSubs = activeSubs.Where(s => !s.Contains("EA Play", StringComparison.OrdinalIgnoreCase)).ToList();
                         if (otherSubs.Any())
                         {
                             statusMessage += $" (Also on: {string.Join(", ", otherSubs)})";
@@ -292,6 +353,25 @@ public class Program
             else
             {
                 Console.WriteLine("No active Xbox Game Pass subscription detected.");
+            }
+        }
+        else if (opts.EaPlay)
+        {
+            Console.WriteLine("Checking EA Play subscription status...");
+            var eaDataService = services.GetRequiredService<EaDataService>();
+            var subscriptionType = await eaDataService.GetEaPlaySubscriptionDetailsAsync();
+
+            if (subscriptionType.StartsWith("Error"))
+            {
+                Console.WriteLine($"Could not determine subscription status. {subscriptionType}");
+            }
+            else if (subscriptionType != "None")
+            {
+                Console.WriteLine($"You have an active subscription: {subscriptionType}");
+            }
+            else
+            {
+                Console.WriteLine("No active EA Play subscription detected.");
             }
         }
         return 0;
