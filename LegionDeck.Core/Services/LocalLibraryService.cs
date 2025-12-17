@@ -31,6 +31,8 @@ public class LocalLibraryService
             {
                 "steam" => $"steam://run/{game.Id}",
                 "ubisoft" => $"uplay://launch/{game.Id}/0",
+                "epic" => $"com.epicgames.launcher://apps/{game.Id}?action=launch&silent=true",
+                "ea" => $"origin://launchgame/{game.Id}",
                 _ => null
             };
         }
@@ -71,8 +73,118 @@ public class LocalLibraryService
         {
             Log($"Error scanning Ubisoft games: {ex.Message}");
         }
+
+        try
+        {
+            Log("Starting Epic game scan");
+            allGames.AddRange(GetInstalledEpicGames());
+            Log($"Epic scan finished. Total games: {allGames.Count}");
+        }
+        catch (Exception ex)
+        {
+            Log($"Error scanning Epic games: {ex.Message}");
+        }
+
+        try
+        {
+            Log("Starting EA game scan");
+            allGames.AddRange(GetInstalledEaGames());
+            Log($"EA scan finished. Total games: {allGames.Count}");
+        }
+        catch (Exception ex)
+        {
+            Log($"Error scanning EA games: {ex.Message}");
+        }
         
         return allGames;
+    }
+
+    public List<InstalledGame> GetInstalledEpicGames()
+    {
+        var games = new List<InstalledGame>();
+        try
+        {
+            string manifestPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "Epic", "EpicGamesLauncher", "Data", "Manifests");
+            if (Directory.Exists(manifestPath))
+            {
+                foreach (var file in Directory.GetFiles(manifestPath, "*.item"))
+                {
+                    try
+                    {
+                        var content = File.ReadAllText(file);
+                        using var doc = System.Text.Json.JsonDocument.Parse(content);
+                        var root = doc.RootElement;
+                        string? name = root.GetProperty("DisplayName").GetString();
+                        string? appId = root.GetProperty("AppName").GetString();
+                        if (name != null && appId != null)
+                        {
+                            games.Add(new InstalledGame
+                            {
+                                Id = appId,
+                                Name = name,
+                                Source = "Epic",
+                                LaunchUri = $"com.epicgames.launcher://apps/{appId}?action=launch&silent=true"
+                            });
+                        }
+                    }
+                    catch { }
+                }
+            }
+        }
+        catch { }
+        return games;
+    }
+
+    public List<InstalledGame> GetInstalledEaGames()
+    {
+        var games = new List<InstalledGame>();
+        try
+        {
+            // EA usually stores info in C:\ProgramData\EA Desktop\Metadata or via AppData
+            // But NexusHub scans the installation folder for __Installer/installerdata.xml
+            // A more reliable way is checking the registry for EA Desktop installs
+            string keyPath = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall";
+            using var key = Registry.LocalMachine.OpenSubKey(keyPath);
+            if (key != null)
+            {
+                foreach (var subKeyName in key.GetSubKeyNames())
+                {
+                    using var subKey = key.OpenSubKey(subKeyName);
+                    if (subKey != null)
+                    {
+                        string? publisher = subKey.GetValue("Publisher") as string;
+                        if (publisher == "Electronic Arts")
+                        {
+                            string? name = subKey.GetValue("DisplayName") as string;
+                            string? installDir = subKey.GetValue("InstallLocation") as string;
+                            if (name != null && !string.IsNullOrEmpty(installDir))
+                            {
+                                // Try to find ContentID in __Installer/installerdata.xml
+                                string installerXml = Path.Combine(installDir, "__Installer", "installerdata.xml");
+                                string? contentId = null;
+                                if (File.Exists(installerXml))
+                                {
+                                    var xml = File.ReadAllText(installerXml);
+                                    var match = System.Text.RegularExpressions.Regex.Match(xml, "<contentID>(.*?)</contentID>");
+                                    if (match.Success) contentId = match.Groups[1].Value;
+                                }
+
+                                games.Add(new InstalledGame
+                                {
+                                    Id = contentId ?? subKeyName,
+                                    Name = name,
+                                    Source = "EA",
+                                    InstallPath = installDir,
+                                    LaunchUri = contentId != null ? $"origin://launchgame/{contentId}" : null
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        catch { }
+        return games;
     }
 
     private void Log(string message)

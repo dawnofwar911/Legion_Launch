@@ -12,6 +12,7 @@ namespace LegionDeck.GUI.Views;
 public sealed partial class LibraryPage : Page
 {
     private ObservableCollection<LibraryGameViewModel> InstalledGames { get; } = new();
+    private List<LibraryGameViewModel> _allGames = new();
     private readonly LocalLibraryService _libraryService = new();
 
     public LibraryPage()
@@ -27,7 +28,7 @@ public sealed partial class LibraryPage : Page
         try
         {
             Log("LibraryPage_Loaded started");
-            if (InstalledGames.Count == 0) await RefreshLibraryAsync();
+            if (_allGames.Count == 0) await RefreshLibraryAsync();
             
             await Task.Delay(200);
             Log("Setting focus to LibraryGridView");
@@ -58,19 +59,46 @@ public sealed partial class LibraryPage : Page
         try
         {
             Log("RefreshLibraryAsync started");
-            InstalledGames.Clear();
+            _allGames.Clear();
             var games = await _libraryService.GetInstalledGamesAsync();
             Log($"Found {games.Count} games");
             foreach (var game in games)
             {
-                InstalledGames.Add(new LibraryGameViewModel(game));
+                _allGames.Add(new LibraryGameViewModel(game));
             }
+            ApplyFilter(SearchBox.Text);
             Log("RefreshLibraryAsync completed");
         }
         catch (Exception ex)
         {
             Log($"Error in RefreshLibraryAsync: {ex.Message}\n{ex.StackTrace}");
         }
+    }
+
+    private void ApplyFilter(string filter)
+    {
+        InstalledGames.Clear();
+        var filtered = string.IsNullOrWhiteSpace(filter) 
+            ? _allGames 
+            : _allGames.Where(g => g.Name.Contains(filter, StringComparison.OrdinalIgnoreCase));
+
+        foreach (var game in filtered)
+        {
+            InstalledGames.Add(game);
+        }
+    }
+
+    private void SearchBox_TextChanged(AutoSuggestBox sender, AutoSuggestBoxTextChangedEventArgs args)
+    {
+        if (args.Reason == AutoSuggestionBoxTextChangeReason.UserInput)
+        {
+            ApplyFilter(sender.Text);
+        }
+    }
+
+    private void SearchBox_QuerySubmitted(AutoSuggestBox sender, AutoSuggestBoxQuerySubmittedEventArgs args)
+    {
+        ApplyFilter(sender.Text);
     }
 
     private async void LibraryGridView_ItemClick(object sender, ItemClickEventArgs e)

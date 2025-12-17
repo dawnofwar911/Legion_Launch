@@ -10,6 +10,16 @@
     <Grid RowDefinitions="Auto,*">
         <CommandBar Grid.Row="0" DefaultLabelPosition="Right">
             <AppBarButton Icon="Refresh" Label="Scan Library" Click="RefreshButton_Click" />
+            <CommandBar.Content>
+                <AutoSuggestBox x:Name="SearchBox" 
+                                QueryIcon="Find" 
+                                PlaceholderText="Search library..." 
+                                Width="300" 
+                                Margin="12,0" 
+                                VerticalAlignment="Center"
+                                QuerySubmitted="SearchBox_QuerySubmitted"
+                                TextChanged="SearchBox_TextChanged"/>
+            </CommandBar.Content>
         </CommandBar>
 
         <GridView Grid.Row="1"
