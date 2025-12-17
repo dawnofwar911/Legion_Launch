@@ -2,7 +2,7 @@ GEMINI.md - Project Context: "LegionDeck" (Working Title)
 1. Project Overview
 Goal: Build a custom, unified game launcher and wishlist aggregator specifically optimized for the Lenovo Legion Go 2 (Windows 11 Handheld). Core Value Proposition:
 
-Wishlist Consolidation: Aggregates wishlists from Steam, Xbox, Ubisoft, and EA into one view.
+Wishlist Consolidation: Primary focus on Steam Wishlist aggregation.
 
 Subscription Intelligence: Cross-references wishlists against active subscriptions (Xbox Game Pass, EA Play Pro, Ubisoft+) to flag "Free to Play" titles.
 
@@ -27,7 +27,7 @@ Data.Aggregator:
 
 Steam: Public API for wishlists (or authenticated scraping for private).
 
-Xbox/Epic/GOG: Authenticated scraping using stored cookies.
+Xbox/Epic/GOG: Used primarily for subscription status checks (e.g. Game Pass availability), not full wishlist syncing.
 
 The.Oracle (Logic Engine):
 
@@ -90,6 +90,6 @@ Xbox: ms-xbl-number:// or xbox://
 Epic: com.epicgames.launcher://
 
 6. Current Context / Active Task
-Status: Initializing Project.
+Status: Phase 1 Development.
 
-Next Action: Create the .NET Console Application and implement the legion auth --service steam command using WebView2.
+Next Action: Integrate Xbox Game Pass status checking with Steam Wishlist results.

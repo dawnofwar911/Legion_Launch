@@ -224,13 +224,48 @@ public class Program
                 subscriptionStatuses = await itadService.IsOnSubscriptionAsync(gamePlainIds);
             }
 
+            // Check User's Game Pass Status
+            var xboxDataService = services.GetRequiredService<XboxDataService>();
+            var userGamePassStatus = await xboxDataService.GetGamePassSubscriptionDetailsAsync();
+            bool userHasGamePassAccess = userGamePassStatus.Contains("Ultimate", StringComparison.OrdinalIgnoreCase) || 
+                                         userGamePassStatus.Contains("PC", StringComparison.OrdinalIgnoreCase);
+
+            if (userHasGamePassAccess)
+            {
+                Console.WriteLine($"[Subscription Check] Active: {userGamePassStatus} - Checking for free games...");
+            }
+
             foreach (var item in wishlistItems)
             {
                 string statusMessage;
 
                 if (item.PlainId != null && subscriptionStatuses.TryGetValue(item.PlainId, out List<string>? activeSubs) && activeSubs != null && activeSubs.Any())
                 {
-                    statusMessage = $"On: {string.Join(", ", activeSubs)}";
+                    // Check if Game Pass is one of the active subscriptions for this game
+                    bool isOnGamePass = activeSubs.Any(s => s.Contains("Game Pass", StringComparison.OrdinalIgnoreCase));
+                    
+                    if (isOnGamePass)
+                    {
+                        if (userHasGamePassAccess)
+                        {
+                            statusMessage = "*** FREE via Game Pass! ***";
+                        }
+                        else
+                        {
+                            statusMessage = "Available on Game Pass (Subscription required)";
+                        }
+                        
+                        // Append other subs if any
+                        var otherSubs = activeSubs.Where(s => !s.Contains("Game Pass", StringComparison.OrdinalIgnoreCase)).ToList();
+                        if (otherSubs.Any())
+                        {
+                            statusMessage += $" (Also on: {string.Join(", ", otherSubs)})";
+                        }
+                    }
+                    else
+                    {
+                        statusMessage = $"On: {string.Join(", ", activeSubs)}";
+                    }
                 }
                 else
                 {
