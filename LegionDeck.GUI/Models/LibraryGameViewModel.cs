@@ -15,6 +15,6 @@ public class LibraryGameViewModel
         if (game.Source == "Steam")
             ImgCapsule = $"https://cdn.cloudflare.steamstatic.com/steam/apps/{game.Id}/library_600x900_2x.jpg";
         else
-            ImgCapsule = "";
+            ImgCapsule = "https://cdn.cloudflare.steamstatic.com/steam/apps/480/library_600x900_2x.jpg"; // Fallback to Spacewar or similar
     }
 }
