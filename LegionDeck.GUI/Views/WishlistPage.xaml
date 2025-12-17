@@ -6,6 +6,7 @@
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:local="using:LegionDeck.GUI.Views"
+    xmlns:models="using:LegionDeck.GUI.Models"
     mc:Ignorable="d">
 
     <Grid RowDefinitions="Auto,*">
@@ -21,7 +22,7 @@
                   IsItemClickEnabled="True"
                   XYFocusKeyboardNavigation="Enabled">
             <GridView.ItemTemplate>
-                <DataTemplate x:DataType="local:SteamWishlistItemViewModel">
+                <DataTemplate x:DataType="models:SteamWishlistItemViewModel">
                     <Grid Width="180" Height="340" Margin="8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" CornerRadius="8">
                         <StackPanel Padding="0" Spacing="0">
                             <Grid Height="240" Background="{ThemeResource ControlFillColorSecondaryBrush}" CornerRadius="8,8,0,0">

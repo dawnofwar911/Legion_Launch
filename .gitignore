@@ -1,5 +1,32 @@
 .gemini/
 gha-creds-*.json
 debug_steam_response.html
-LegionDeck.CLI/bin/
-LegionDeck.CLI/obj/
+
+# .NET
+bin/
+obj/
+*.user
+*.userosscache
+*.sln.docstates
+
+# Visual Studio
+.vs/
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+ARM/
+ARM64/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.userprefs
+
+# VS Code
+.vscode/
+
+# Node.js (for NexusHub)
+node_modules/
+dist/
+dist-electron/
