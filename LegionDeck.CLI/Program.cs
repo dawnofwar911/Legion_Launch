@@ -183,11 +183,6 @@ public class Program
                 {
                     statusMessage = $"On: {string.Join(", ", activeSubs)}";
                 }
-                    else
-                    {
-                        statusMessage = "Not on any subscription.";
-                    }
-                }
                 else
                 {
                     statusMessage = "Not on any subscription.";
