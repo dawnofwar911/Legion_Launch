@@ -7,6 +7,8 @@ using System.Web; // For HttpUtility.UrlEncode
 using LegionDeck.CLI.Models; // For SteamWishlistItem, potentially other game models
 using LegionDeck.CLI.Services; // For ConfigService
 
+using System.Text.Json.Serialization; 
+
 namespace LegionDeck.CLI.Services;
 
 public class ItadApiService
@@ -34,29 +36,30 @@ public class ItadApiService
     public class ItadGameLookupItem
     {
         public string? Title { get; set; }
-        public string? Plain { get; set; } // ITAD's internal game identifier
+        [JsonPropertyName("id")] // Map 'id' (UUID) from API response to 'Plain' property
+        public string? Plain { get; set; } // ITAD's internal game identifier (now mapped from id)
     }
 
-    // Models for games/overview/v1
-    public class ItadGameOverviewResult
+    // Models for games/subs/v1
+    public class ItadSubsResult : List<ItadGameSubscription>
     {
-        public ItadGameOverviewData? Data { get; set; }
     }
 
-    public class ItadGameOverviewData
+    public class ItadGameSubscription
     {
-        public string? Title { get; set; }
-        public string? Plain { get; set; }
-        public Dictionary<string, List<ItadOffer>>? Offers { get; set; } // Offers grouped by shop name
+        [JsonPropertyName("id")] // Explicitly map 'id' from JSON to this property
+        public string? Id { get; set; } // The game's plain ID (UUID)
+        [JsonPropertyName("subs")] // Explicitly map 'subs' from JSON to this property
+        public List<ItadSubscription>? Subs { get; set; }
     }
 
-    public class ItadOffer
+    public class ItadSubscription
     {
-        public string? Shop { get; set; }
-        public decimal? Price { get; set; }
-        public decimal? PriceCut { get; set; }
-        public string? Url { get; set; }
-        public List<string>? Drm { get; set; } // Digital Rights Management, includes "xboxgamepass" if available
+        public int Id { get; set; } // ID of the subscription service
+        [JsonPropertyName("name")] // Explicitly map 'name' from JSON to this property
+        public string? Name { get; set; } // e.g., "Game Pass"
+        [JsonPropertyName("leaving")] // Explicitly map 'leaving' from JSON to this property
+        public string? Leaving { get; set; } // Date leaving subscription
     }
 
     private string CleanGameTitle(string title)
@@ -74,18 +77,20 @@ public class ItadApiService
     {
         var cleanedTitle = CleanGameTitle(title);
         var encodedTitle = HttpUtility.UrlEncode(cleanedTitle);
-        var url = $"{BaseUrl}games/search/v1?key={_apiKey}&title={encodedTitle}&limit=1"; // Changed 'q' to 'title'
+        var url = $"{BaseUrl}games/search/v1?key={_apiKey}&title={encodedTitle}&limit=1"; // Reverted limit to 1
         
         try
         {
             var response = await _httpClient.GetStringAsync(url);
             var result = JsonSerializer.Deserialize<ItadGameLookupResult>(response);
+
             if (result == null || result.Count == 0)
             {
                 Console.WriteLine($"[Error] Game '{title}' not found on ITAD.");
                 return null;
             }
-            return result?.FirstOrDefault()?.Plain;
+            // Simplified to take the first result, as it's the most relevant with limit=1
+            return result.FirstOrDefault()?.Plain;
         }
         catch (HttpRequestException ex)
         {
@@ -99,53 +104,68 @@ public class ItadApiService
         }
     }
 
-    public async Task<bool> IsOnSubscriptionAsync(string plain, string subscriptionService)
+    public async Task<Dictionary<string, List<string>>> IsOnSubscriptionAsync(List<string> plains)
     {
-        Console.WriteLine($"[Debug] Checking subscription for plain '{plain}' on service '{subscriptionService}'.");
-        var url = $"{BaseUrl}games/overview/v1?key={_apiKey}&plain={plain}";
+        var subscriptionStatus = new Dictionary<string, List<string>>();
+        
+        var url = $"{BaseUrl}games/subs/v1?key={_apiKey}&region=GB"; 
 
         try
         {
-            var responseMessage = await _httpClient.GetAsync(url);
-            var response = await responseMessage.Content.ReadAsStringAsync(); // Read content regardless of success
+            var requestBody = JsonSerializer.Serialize(plains);
+            using var content = new StringContent(requestBody, System.Text.Encoding.UTF8, "application/json");
 
-            Console.WriteLine($"[Debug] ITAD Overview Raw Response for plain '{plain}': {response.Substring(0, Math.Min(response.Length, 500))}"); // Print first 500 chars for debug
+            var responseMessage = await _httpClient.PostAsync(url, content);
+            var response = await responseMessage.Content.ReadAsStringAsync();
 
-            responseMessage.EnsureSuccessStatusCode(); // Throws HttpRequestException for non-success codes
+            responseMessage.EnsureSuccessStatusCode();
 
-            var result = JsonSerializer.Deserialize<ItadGameOverviewResult>(response);
+            var result = JsonSerializer.Deserialize<List<ItadGameSubscription>>(response);
 
-            if (result?.Data?.Offers != null)
+            if (result != null)
             {
-                foreach (var shopOffers in result.Data.Offers.Values)
+                foreach (var plainId in plains)
                 {
-                    foreach (var offer in shopOffers)
+                    var gameSubscription = result.FirstOrDefault(gs => gs.Id == plainId);
+                    var activeSubscriptions = new List<string>();
+
+                    if (gameSubscription != null && gameSubscription.Subs != null)
                     {
-                        if (offer.Drm != null && offer.Drm.Contains(subscriptionService, StringComparer.OrdinalIgnoreCase))
+                        foreach (var sub in gameSubscription.Subs)
                         {
-                            Console.WriteLine($"[Debug] Found '{plain}' on '{subscriptionService}' via DRM: {string.Join(", ", offer.Drm)}");
-                            return true;
+                            if (sub.Leaving == null) // Check if the subscription is currently active
+                            {
+                                activeSubscriptions.Add(sub.Name ?? "Unknown Subscription");
+                            }
                         }
                     }
+                    
+                    subscriptionStatus[plainId] = activeSubscriptions;
                 }
             }
-            Console.WriteLine($"[Debug] '{plain}' not found on '{subscriptionService}' in ITAD offers.");
-            return false;
+            return subscriptionStatus;
         }
         catch (HttpRequestException ex)
         {
-            Console.WriteLine($"[Error] ITAD API request failed for '{plain}' subscription: {ex.Message}");
-            // Now, also print the response body if available, as that usually contains API-specific error details.
+            Console.WriteLine($"[Error] ITAD API POST request failed for plains '{string.Join(", ", plains)}' subscription: {ex.Message}");
             if (ex.StatusCode.HasValue)
             {
                 Console.WriteLine($"[Debug] HTTP Status Code: {ex.StatusCode.Value}");
             }
-            return false;
+            foreach (var plainId in plains)
+            {
+                subscriptionStatus[plainId] = new List<string> { "Error" }; // Indicate error
+            }
+            return subscriptionStatus;
         }
         catch (JsonException ex)
         {
-            Console.WriteLine($"[Error] Failed to parse ITAD subscription info for '{plain}': {ex.Message}");
-            return false;
+            Console.WriteLine($"[Error] Failed to parse ITAD subscription info for plains '{string.Join(", ", plains)}': {ex.Message}");
+            foreach (var plainId in plains)
+            {
+                subscriptionStatus[plainId] = new List<string> { "Error" }; // Indicate error
+            }
+            return subscriptionStatus;
         }
     }
 }

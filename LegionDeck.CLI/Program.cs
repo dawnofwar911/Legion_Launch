@@ -152,6 +152,9 @@ public class Program
             var wishlistItems = await steamWishlistService.GetWishlistAsync(null);
 
             Console.WriteLine($"Found {wishlistItems.Count} items in Steam Wishlist:");
+
+            var gamePlainIds = new List<string>();
+
             foreach (var item in wishlistItems)
             {
                 var gameName = await steamWishlistService.GetAppDetailsAsync(item.AppId);
@@ -161,25 +164,36 @@ public class Program
                 }
                 item.Name = gameName; // Update item with actual name
 
-                string subscriptionStatus = "Not on Game Pass";
-                try
+                var plainId = await itadService.GetPlainIdAsync(item.Name);
+                if (plainId != null)
                 {
-                    var plainId = await itadService.GetPlainIdAsync(gameName);
-                    if (plainId != null)
+                    item.PlainId = plainId; // Store PlainId in the item
+                    gamePlainIds.Add(plainId);
+                }
+            }
+
+            // Batched call to check subscription status
+            var subscriptionStatuses = await itadService.IsOnSubscriptionAsync(gamePlainIds);
+
+            foreach (var item in wishlistItems)
+            {
+                string statusMessage;
+
+                if (item.PlainId != null && subscriptionStatuses.TryGetValue(item.PlainId, out List<string>? activeSubs) && activeSubs != null && activeSubs.Any())
+                {
+                    statusMessage = $"On: {string.Join(", ", activeSubs)}";
+                }
+                    else
                     {
-                        var isOnGamePass = await itadService.IsOnSubscriptionAsync(plainId, "xboxgamepass");
-                        if (isOnGamePass)
-                        {
-                            subscriptionStatus = "On Game Pass!";
-                        }
+                        statusMessage = "Not on any subscription.";
                     }
                 }
-                catch (Exception ex)
+                else
                 {
-                    Console.WriteLine($"[Error] Failed to check subscription status for '{gameName}': {ex.Message}");
+                    statusMessage = "Not on any subscription.";
                 }
-
-                Console.WriteLine($"- {item.Name} (AppId: {item.AppId}) - Status: {subscriptionStatus}");
+                
+                Console.WriteLine($"- {item.Name} (AppId: {item.AppId}) - Status: {statusMessage}");
             }
         }
         return 0;
