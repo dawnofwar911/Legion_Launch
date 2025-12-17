@@ -230,21 +230,22 @@ public class LocalLibraryService
     public List<InstalledGame> GetInstalledUbisoftGames()
     {
         var games = new List<InstalledGame>();
-        try
+        var paths = new[] { @"SOFTWARE\WOW6432Node\Ubisoft\Launcher\Installs", @"SOFTWARE\Ubisoft\Launcher\Installs" };
+
+        foreach (var keyPath in paths)
         {
-            string keyPath = @"SOFTWARE\WOW6432Node\Ubisoft\Launcher\Installs";
-            using (var key = Registry.LocalMachine.OpenSubKey(keyPath))
+            try
             {
-                if (key != null)
+                using (var key = Registry.LocalMachine.OpenSubKey(keyPath))
                 {
+                    if (key == null) continue;
+
                     foreach (var subKeyName in key.GetSubKeyNames())
                     {
                         using (var subKey = key.OpenSubKey(subKeyName))
                         {
                             if (subKey != null)
                             {
-                                // Ubisoft usually stores the name in a "GameName" or similar value, but sometimes it's missing.
-                                // Let's try multiple ways to get the name.
                                 string? name = subKey.GetValue("Name") as string 
                                             ?? subKey.GetValue("DisplayName") as string
                                             ?? subKey.GetValue("GameName") as string;
@@ -258,21 +259,24 @@ public class LocalLibraryService
 
                                 if (string.IsNullOrEmpty(name)) name = "Ubisoft Game " + subKeyName;
 
-                                games.Add(new InstalledGame
+                                if (!games.Any(g => g.Id == subKeyName))
                                 {
-                                    Id = subKeyName,
-                                    Name = name,
-                                    Source = "Ubisoft",
-                                    InstallPath = installDir ?? string.Empty,
-                                    LaunchUri = "upc://launch/" + subKeyName + "/0"
-                                });
+                                    games.Add(new InstalledGame
+                                    {
+                                        Id = subKeyName,
+                                        Name = name,
+                                        Source = "Ubisoft",
+                                        InstallPath = installDir ?? string.Empty,
+                                        LaunchUri = "uplay://launch/" + subKeyName + "/0"
+                                    });
+                                }
                             }
                         }
                     }
                 }
             }
+            catch { }
         }
-        catch { }
         return games;
     }
 
