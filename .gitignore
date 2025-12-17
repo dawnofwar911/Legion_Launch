@@ -1,0 +1,5 @@
+.gemini/
+gha-creds-*.json
+debug_steam_response.html
+LegionDeck.CLI/bin/
+LegionDeck.CLI/obj/
