@@ -230,9 +230,34 @@ public class LocalLibraryService
     public List<InstalledGame> GetInstalledUbisoftGames()
     {
         var games = new List<InstalledGame>();
-        var paths = new[] { @"SOFTWARE\WOW6432Node\Ubisoft\Launcher\Installs", @"SOFTWARE\Ubisoft\Launcher\Installs" };
+        var nameMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
-        foreach (var keyPath in paths)
+        // 1. Build a map of InstallDir -> Friendly Name from the main Ubisoft key
+        var ubisoftPaths = new[] { @"SOFTWARE\WOW6432Node\Ubisoft", @"SOFTWARE\Ubisoft" };
+        foreach (var uPath in ubisoftPaths)
+        {
+            try
+            {
+                using var uKey = Registry.LocalMachine.OpenSubKey(uPath);
+                if (uKey == null) continue;
+                foreach (var subKeyName in uKey.GetSubKeyNames())
+                {
+                    if (subKeyName == "Launcher" || subKeyName == "Microsoft") continue;
+                    using var subKey = uKey.OpenSubKey(subKeyName);
+                    if (subKey == null) continue;
+                    string? installDir = subKey.GetValue("InstallDir") as string;
+                    if (!string.IsNullOrEmpty(installDir))
+                    {
+                        nameMap[installDir.TrimEnd('\\', '/')] = subKeyName;
+                    }
+                }
+            }
+            catch { }
+        }
+
+        // 2. Scan Launcher\Installs for IDs and match with names using the map
+        var installPaths = new[] { @"SOFTWARE\WOW6432Node\Ubisoft\Launcher\Installs", @"SOFTWARE\Ubisoft\Launcher\Installs" };
+        foreach (var keyPath in installPaths)
         {
             try
             {
@@ -246,15 +271,27 @@ public class LocalLibraryService
                         {
                             if (subKey != null)
                             {
-                                string? name = subKey.GetValue("Name") as string 
-                                            ?? subKey.GetValue("DisplayName") as string
-                                            ?? subKey.GetValue("GameName") as string;
-
                                 string? installDir = subKey.GetValue("InstallDir") as string;
-                                
-                                if (string.IsNullOrEmpty(name) && !string.IsNullOrEmpty(installDir))
+                                if (string.IsNullOrEmpty(installDir)) continue;
+
+                                string cleanInstallDir = installDir.TrimEnd('\\', '/');
+                                string? name = null;
+
+                                // Try to get name from our previously built map
+                                if (nameMap.TryGetValue(cleanInstallDir, out var mappedName))
                                 {
-                                    name = Path.GetFileName(installDir.TrimEnd('\\', '/'));
+                                    name = mappedName;
+                                }
+
+                                // Fallbacks from current subkey
+                                name ??= subKey.GetValue("Name") as string 
+                                      ?? subKey.GetValue("DisplayName") as string
+                                      ?? subKey.GetValue("GameName") as string;
+
+                                if (string.IsNullOrEmpty(name))
+                                {
+                                    name = Path.GetDirectoryName(cleanInstallDir); // Try parent folder if it's 'games'
+                                    name = Path.GetFileName(cleanInstallDir);
                                 }
 
                                 if (string.IsNullOrEmpty(name)) name = "Ubisoft Game " + subKeyName;
@@ -266,7 +303,7 @@ public class LocalLibraryService
                                         Id = subKeyName,
                                         Name = name,
                                         Source = "Ubisoft",
-                                        InstallPath = installDir ?? string.Empty,
+                                        InstallPath = installDir,
                                         LaunchUri = "uplay://launch/" + subKeyName + "/0"
                                     });
                                 }
