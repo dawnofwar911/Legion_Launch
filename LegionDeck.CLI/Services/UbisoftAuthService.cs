@@ -45,7 +45,7 @@ public class UbisoftLoginForm : Form
 {
     private readonly TaskCompletionSource<string?> _tcs;
     private WebView2 _webView;
-    private bool _isScraping = false;
+    private bool _hasScrapedSuccessfully = false;
 
     public UbisoftLoginForm(TaskCompletionSource<string?> tcs)
     {
@@ -60,7 +60,138 @@ public class UbisoftLoginForm : Form
         this.Controls.Add(_webView);
 
         this.Load += UbisoftLoginForm_Load;
+        this.FormClosing += UbisoftLoginForm_FormClosing;
     }
+
+
+
+
+
+    private async Task PerformScrapingAndCloseForm()
+    {
+        // If scraping has already successfully occurred, just complete the task and close the form.
+        if (_hasScrapedSuccessfully)
+        {
+            Console.WriteLine("[DEBUG] PerformScrapingAndCloseForm: Automated scraping previously triggered and completed. Closing form.");
+            _tcs.TrySetResult("UbisoftLoggedIn");
+            this.Close();
+            return;
+        }
+
+        Console.WriteLine($"[DEBUG] PerformScrapingAndCloseForm: Started. Initiating new scrape.");
+        Console.WriteLine($"[DEBUG] PerformScrapingAndCloseForm: Current URL when started: {_webView.Source.ToString()}");
+        
+        string? resultStatus = "UbisoftLoggedIn"; // Assume success initially
+
+        try
+        {
+            // Ensure we are on the correct Ubisoft+ account page before scraping
+            string targetUrl = "https://store.ubisoft.com/uk/my-account#account-ubisoftplus";
+            if (! _webView.Source.ToString().StartsWith(targetUrl, StringComparison.OrdinalIgnoreCase))
+            {
+                Console.WriteLine($"[DEBUG] Navigating to target URL: {targetUrl}");
+                _webView.Source = new Uri(targetUrl);
+                // Wait for navigation to complete
+                await Task.Delay(5000); // Give ample time for new page load and redirects
+                Console.WriteLine($"[DEBUG] Navigated to: {_webView.Source.ToString()}");
+            }
+
+            // Wait for potential page refresh/dynamic content to load after user login
+            await Task.Delay(2000); // Additional delay to ensure dynamic content is loaded
+
+            // 1. Capture and Save Cookies
+            var cookieManager = _webView.CoreWebView2.CookieManager;
+            var cookies = await cookieManager.GetCookiesAsync("https://store.ubisoft.com");
+            var mainCookies = await cookieManager.GetCookiesAsync("https://ubisoft.com");
+            var allCookies = cookies.Concat(mainCookies).GroupBy(c => c.Name + c.Domain).Select(g => g.First()).ToList();
+
+            var cookieData = allCookies.Select(c => new 
+            { 
+                c.Name, c.Value, c.Domain, c.Path, c.Expires, c.IsSecure, c.IsHttpOnly 
+            }).ToList();
+            var json = JsonSerializer.Serialize(cookieData, new JsonSerializerOptions { WriteIndented = true });
+            var authTokensPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LegionDeck", "AuthTokens");
+            Directory.CreateDirectory(authTokensPath);
+            var ubisoftCookiesPath = Path.Combine(authTokensPath, "ubisoft_cookies.json");
+            Console.WriteLine($"[DEBUG] Attempting to save Ubisoft cookies to: {ubisoftCookiesPath}");
+            await File.WriteAllTextAsync(ubisoftCookiesPath, json);
+            Console.WriteLine($"[DEBUG] Ubisoft cookies saved successfully to {ubisoftCookiesPath}");
+            
+            // 2. Perform Scraping for Status
+            string content = await _webView.ExecuteScriptAsync("document.body.textContent");
+            content = System.Text.RegularExpressions.Regex.Unescape(content);
+            
+            Console.WriteLine($"[Debug Scrape] Scrape Final URL: {_webView.Source.ToString()}");
+            // For debugging, uncomment to see more content:
+            // Console.WriteLine($"[Debug Scrape] Content start: {content.Substring(0, Math.Min(content.Length, 2000))}");
+
+            string status = "None";
+
+            // Look for explicit markers
+            if (content.Contains("Ubisoft+ Premium", StringComparison.OrdinalIgnoreCase) && 
+                content.Contains("Active", StringComparison.OrdinalIgnoreCase))
+            {
+                status = "Ubisoft+ Premium";
+            }
+            else if (content.Contains("Ubisoft+ Classics", StringComparison.OrdinalIgnoreCase) && 
+                     content.Contains("Active", StringComparison.OrdinalIgnoreCase))
+            {
+                status = "Ubisoft+ Classics";
+            }
+            else if (content.Contains("Ubisoft+ PC Access", StringComparison.OrdinalIgnoreCase) && 
+                     content.Contains("Active", StringComparison.OrdinalIgnoreCase))
+            {
+                status = "Ubisoft+ PC Access";
+            }
+            else if (content.Contains("Ubisoft+ Premium", StringComparison.OrdinalIgnoreCase) && 
+                     content.Contains("Manage subscription", StringComparison.OrdinalIgnoreCase))
+            {
+                 status = "Ubisoft+ Premium"; // Active implied if "Manage subscription" is present for Premium
+            }
+            else if (content.Contains("Active", StringComparison.OrdinalIgnoreCase) && 
+                     (content.Contains("Ubisoft+", StringComparison.OrdinalIgnoreCase) || content.Contains("Ubisoft Plus", StringComparison.OrdinalIgnoreCase)))
+            {
+                status = "Ubisoft+ (Unknown Tier)";
+            }
+            else if (content.Contains("Subscribe now", StringComparison.OrdinalIgnoreCase) || 
+                     content.Contains("Join Ubisoft+", StringComparison.OrdinalIgnoreCase) ||
+                     content.Contains("Choose your plan", StringComparison.OrdinalIgnoreCase) ||
+                     content.Contains("No active subscription", StringComparison.OrdinalIgnoreCase)) // Added explicit negative indicator
+            {
+                status = "None";
+            }
+
+            var ubisoftStatusPath = Path.Combine(authTokensPath, "ubisoft_status.txt");
+            Console.WriteLine($"[DEBUG] Attempting to save Ubisoft status to: {ubisoftStatusPath}");
+            await File.WriteAllTextAsync(ubisoftStatusPath, status);
+            Console.WriteLine($"[DEBUG] Ubisoft status saved successfully to {ubisoftStatusPath}");
+            _hasScrapedSuccessfully = true; // Set flag ONLY after successful file writes
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Error FinalizeAuth] Exception caught: {ex.Message}");
+            resultStatus = null; // Indicate failure
+            _tcs.TrySetException(ex); // Set exception to task completion source
+        }
+        finally
+        {
+            Console.WriteLine($"[DEBUG] PerformScrapingAndCloseForm: Completed.");
+            _tcs.TrySetResult(resultStatus); // Set task result
+            this.Close(); // Close the form
+        }
+    }
+
+
+
+    private async void UbisoftLoginForm_FormClosing(object? sender, FormClosingEventArgs e)
+    {
+        // Only trigger scraping if the task hasn't been completed yet by other means
+        if (_tcs.Task.Status == TaskStatus.WaitingForActivation || _tcs.Task.Status == TaskStatus.Running)
+        {
+            await PerformScrapingAndCloseForm();
+        }
+    }
+
 
     private async void UbisoftLoginForm_Load(object? sender, EventArgs e)
     {
@@ -76,12 +207,10 @@ public class UbisoftLoginForm : Form
 
             // Handle new window requests
             _webView.CoreWebView2.NewWindowRequested += CoreWebView2_NewWindowRequested;
-            _webView.SourceChanged += WebView_SourceChanged;
-
-            // Navigate to Ubisoft Store Account Page - Best entry point
-            _webView.Source = new Uri("https://store.ubisoft.com/uk/my-account");
-            
             _webView.NavigationCompleted += WebView_NavigationCompleted;
+
+            // Navigate to Ubisoft Store Account Page with Ubisoft+ tab pre-selected
+            _webView.Source = new Uri("https://store.ubisoft.com/uk/my-account#account-ubisoftplus");
         }
         catch (Exception ex)
         {
@@ -96,157 +225,49 @@ public class UbisoftLoginForm : Form
         _webView.Source = new Uri(e.Uri);
     }
 
-    private async void WebView_SourceChanged(object? sender, CoreWebView2SourceChangedEventArgs e)
-    {
-        await CheckForLogin();
-    }
-
     private async void WebView_NavigationCompleted(object? sender, CoreWebView2NavigationCompletedEventArgs e)
     {
-        if (e.IsSuccess)
+        if (e.IsSuccess && !_hasScrapedSuccessfully)
         {
-            await CheckForLogin();
-        }
-    }
-
-    private async Task CheckForLogin()
-    {
-        try 
-        {
-            if (_isScraping)
-            {
-                await PerformScrape();
-                return;
-            }
-
-            var currentUrl = _webView.Source.ToString();
+            Console.WriteLine($"[DEBUG] WebView_NavigationCompleted: Navigated successfully to {_webView.Source.ToString()}");
             
-            // Console.WriteLine($"[Debug] Checking URL: {currentUrl}");
+            // Give the page a moment to render dynamic content after navigation
+            await Task.Delay(2000); 
 
-            bool onAccountPage = currentUrl.Contains("/my-account", StringComparison.OrdinalIgnoreCase) && 
-                                !currentUrl.Contains("login", StringComparison.OrdinalIgnoreCase) && 
-                                !currentUrl.Contains("signin", StringComparison.OrdinalIgnoreCase);
+            // Inject JavaScript to check for login indicators
+            string script = @"
+                var isLoggedIn = false;
+                // Check for elements that typically indicate a logged-in state on Ubisoft's account page
+                var accountSection = document.querySelector('section.account-section');
+                var welcomeMessage = document.querySelector('.my-account-page__welcome');
+                var subscriptionSection = document.getElementById('account-ubisoftplus');
 
-            if (onAccountPage)
-            {
-                Console.WriteLine($"[Auth Success] Reached Account Page. Proceeding to scrape subscription status...");
-                
-                // Capture all cookies from store domain
-                var cookieManager = _webView.CoreWebView2.CookieManager;
-                var cookies = await cookieManager.GetCookiesAsync("https://store.ubisoft.com");
-                var mainCookies = await cookieManager.GetCookiesAsync("https://ubisoft.com");
-                var allCookies = cookies.Concat(mainCookies).GroupBy(c => c.Name + c.Domain).Select(g => g.First()).ToList();
-
-                var cookieData = allCookies.Select(c => new 
-                { 
-                    c.Name, c.Value, c.Domain, c.Path, c.Expires, c.IsSecure, c.IsHttpOnly 
-                }).ToList();
-                var json = JsonSerializer.Serialize(cookieData, new JsonSerializerOptions { WriteIndented = true });
-                var authTokensPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LegionDeck", "AuthTokens");
-                Directory.CreateDirectory(authTokensPath);
-                await File.WriteAllTextAsync(Path.Combine(authTokensPath, "ubisoft_cookies.json"), json);
-
-                // Start Scraping Phase - Navigate to the # tab
-                _isScraping = true;
-                _webView.Source = new Uri("https://store.ubisoft.com/uk/my-account#account-ubisoftplus");
-            }
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"[Error] Error during Ubisoft auth/scrape: {ex.Message}");
-        }
-    }
-
-    private async Task PerformScrape()
-    {
-        // Wait for page to be "ready" enough
-        try 
-        {
-            // Wait until document is ready - essential for SPA content
-            var maxAttempts = 20; // 20 attempts * 500ms = 10 seconds
-            for (int i = 0; i < maxAttempts; i++)
-            {
-                var readyState = await _webView.ExecuteScriptAsync("document.readyState");
-                var unescapedReadyState = JsonSerializer.Deserialize<string>(readyState);
-                if (unescapedReadyState == "complete")
-                {
-                    break;
+                if ((accountSection && accountSection.innerText.includes('Hello,')) || 
+                    (welcomeMessage && welcomeMessage.innerText.includes('Welcome')) ||
+                    (subscriptionSection && subscriptionSection.innerText.includes('Ubisoft+'))) {
+                    isLoggedIn = true;
                 }
-                await Task.Delay(500); 
-            }
+                isLoggedIn;
+            ";
 
-            // Give a little more time for dynamic content to render
-            await Task.Delay(8000);
+            string result = await _webView.ExecuteScriptAsync(script);
+            bool isLoggedIn = bool.Parse(result);
 
-            var content = await _webView.ExecuteScriptAsync("document.body.textContent");
-            content = System.Text.RegularExpressions.Regex.Unescape(content);
-            
-            Console.WriteLine($"[Debug Scrape] Scrape Final URL: {_webView.Source.ToString()}");
-            Console.WriteLine($"[Debug Scrape] Content start: {content.Substring(0, Math.Min(content.Length, 2000))}");
-
-            string status = "None";
-            bool found = false;
-
-            Console.WriteLine($"[Debug Scrape] Contains 'Ubisoft+ Premium' && 'Active': {content.Contains("Ubisoft+ Premium", StringComparison.OrdinalIgnoreCase) && content.Contains("Active", StringComparison.OrdinalIgnoreCase)}");
-            Console.WriteLine($"[Debug Scrape] Contains 'Ubisoft+ Classics' && 'Active': {content.Contains("Ubisoft+ Classics", StringComparison.OrdinalIgnoreCase) && content.Contains("Active", StringComparison.OrdinalIgnoreCase)}");
-            Console.WriteLine($"[Debug Scrape] Contains 'Ubisoft+ PC Access' && 'Active': {content.Contains("Ubisoft+ PC Access", StringComparison.OrdinalIgnoreCase) && content.Contains("Active", StringComparison.OrdinalIgnoreCase)}");
-            Console.WriteLine($"[Debug Scrape] Contains 'Ubisoft+ Premium' && 'Manage subscription': {content.Contains("Ubisoft+ Premium", StringComparison.OrdinalIgnoreCase) && content.Contains("Manage subscription", StringComparison.OrdinalIgnoreCase)}");
-            Console.WriteLine($"[Debug Scrape] Contains 'Ubisoft+' && 'Active' (Unknown Tier): {content.Contains("Active", StringComparison.OrdinalIgnoreCase) && (content.Contains("Ubisoft+", StringComparison.OrdinalIgnoreCase) || content.Contains("Ubisoft Plus", StringComparison.OrdinalIgnoreCase))}");
-            Console.WriteLine($"[Debug Scrape] Contains 'Subscribe now' (Negative): {content.Contains("Subscribe now", StringComparison.OrdinalIgnoreCase)}");
-
-
-            // Look for explicit markers (relaxed)
-            if (content.Contains("Ubisoft+ Premium", StringComparison.OrdinalIgnoreCase) && 
-                content.Contains("Active", StringComparison.OrdinalIgnoreCase))
+            if (isLoggedIn)
             {
-                status = "Ubisoft+ Premium";
-                found = true;
+                Console.WriteLine("[DEBUG] Logged-in state detected, preparing to trigger scraping via PerformScrapingAndCloseForm.");
+                await PerformScrapingAndCloseForm();
             }
-            else if (content.Contains("Ubisoft+ Classics", StringComparison.OrdinalIgnoreCase) && 
-                     content.Contains("Active", StringComparison.OrdinalIgnoreCase))
+            else
             {
-                status = "Ubisoft+ Classics";
-                found = true;
-            }
-            else if (content.Contains("Ubisoft+ PC Access", StringComparison.OrdinalIgnoreCase) && 
-                     content.Contains("Active", StringComparison.OrdinalIgnoreCase))
-            {
-                status = "Ubisoft+ PC Access";
-                found = true;
-            }
-            else if (content.Contains("Ubisoft+ Premium", StringComparison.OrdinalIgnoreCase) && 
-                     content.Contains("Manage subscription", StringComparison.OrdinalIgnoreCase))
-            {
-                 status = "Ubisoft+ Premium"; // Active implied
-                 found = true;
-            }
-            else if (content.Contains("Active", StringComparison.OrdinalIgnoreCase) && 
-                     (content.Contains("Ubisoft+", StringComparison.OrdinalIgnoreCase) || content.Contains("Ubisoft Plus", StringComparison.OrdinalIgnoreCase)))
-            {
-                status = "Ubisoft+ (Unknown Tier)";
-                found = true;
-            }
-            else if (content.Contains("Subscribe now", StringComparison.OrdinalIgnoreCase) || 
-                     content.Contains("Join Ubisoft+", StringComparison.OrdinalIgnoreCase) ||
-                     content.Contains("Choose your plan", StringComparison.OrdinalIgnoreCase))
-            {
-                status = "None";
-                found = true; // Found negative confirmation
-            }
-
-            if (found) 
-            {
-                var authTokensPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LegionDeck", "AuthTokens");
-                await File.WriteAllTextAsync(Path.Combine(authTokensPath, "ubisoft_status.txt"), status);
-                Console.WriteLine($"[Scrape Success] Ubisoft+ Status: {status}");
-                
-                _tcs.TrySetResult("UbisoftLoggedIn");
-                this.Close();
+                Console.WriteLine("[DEBUG] Logged-in state not yet detected or page not ready for scraping.");
             }
         }
-        catch (Exception ex)
+        else if (!e.IsSuccess)
         {
-            Console.WriteLine($"[Error Scrape] {ex.Message}");
+            Console.WriteLine($"[Debug] WebView2 Navigation Failed: URL={_webView.Source.ToString()}, Status={e.WebErrorStatus}");
         }
     }
+
+
 }
