@@ -67,7 +67,7 @@ public class LocalLibraryService
         {
             Log("Starting Ubisoft game scan");
             allGames.AddRange(GetInstalledUbisoftGames());
-            Log($"Ubisoft scan finished. Total games: {allGames.Count}");
+            Log($"Ubisoft scan finished. Total games so far: {allGames.Count}");
         }
         catch (Exception ex)
         {
@@ -78,7 +78,7 @@ public class LocalLibraryService
         {
             Log("Starting Epic game scan");
             allGames.AddRange(GetInstalledEpicGames());
-            Log($"Epic scan finished. Total games: {allGames.Count}");
+            Log($"Epic scan finished. Total games so far: {allGames.Count}");
         }
         catch (Exception ex)
         {
@@ -89,42 +89,63 @@ public class LocalLibraryService
         {
             Log("Starting EA game scan");
             allGames.AddRange(GetInstalledEaGames());
-            Log($"EA scan finished. Total games: {allGames.Count}");
+            Log($"EA scan finished. Total games so far: {allGames.Count}");
         }
         catch (Exception ex)
         {
             Log($"Error scanning EA games: {ex.Message}");
         }
+
+        try
+        {
+            Log("Starting Xbox game scan");
+            allGames.AddRange(GetInstalledXboxGames());
+            Log($"Xbox scan finished. Total games so far: {allGames.Count}");
+        }
+        catch (Exception ex)
+        {
+            Log($"Error scanning Xbox games: {ex.Message}");
+        }
         
         return allGames;
     }
 
-    public List<InstalledGame> GetInstalledEpicGames()
+    public List<InstalledGame> GetInstalledXboxGames()
     {
         var games = new List<InstalledGame>();
         try
         {
-            string manifestPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "Epic", "EpicGamesLauncher", "Data", "Manifests");
-            if (Directory.Exists(manifestPath))
+            // Xbox games are usually in C:\XboxGames or C:\Program Files\WindowsApps
+            // Scanning C:\XboxGames is easier and less permission-intensive
+            string xboxGamesPath = @"C:\XboxGames";
+            if (Directory.Exists(xboxGamesPath))
             {
-                foreach (var file in Directory.GetFiles(manifestPath, "*.item"))
+                foreach (var gameDir in Directory.GetDirectories(xboxGamesPath))
                 {
                     try
                     {
-                        var content = File.ReadAllText(file);
-                        using var doc = System.Text.Json.JsonDocument.Parse(content);
-                        var root = doc.RootElement;
-                        string? name = root.GetProperty("DisplayName").GetString();
-                        string? appId = root.GetProperty("AppName").GetString();
-                        if (name != null && appId != null)
+                        string configPath = Path.Combine(gameDir, "Content", "MicrosoftGame.config");
+                        if (!File.Exists(configPath)) configPath = Path.Combine(gameDir, "MicrosoftGame.config");
+
+                        if (File.Exists(configPath))
                         {
-                            games.Add(new InstalledGame
+                            var xml = File.ReadAllText(configPath);
+                            var storeIdMatch = System.Text.RegularExpressions.Regex.Match(xml, "<StoreId>(.*?)</StoreId>", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                            var nameMatch = System.Text.RegularExpressions.Regex.Match(xml, "DefaultDisplayName=\"(.*?)\"", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+                            if (storeIdMatch.Success)
                             {
-                                Id = appId,
-                                Name = name,
-                                Source = "Epic",
-                                LaunchUri = $"com.epicgames.launcher://apps/{appId}?action=launch&silent=true"
-                            });
+                                string storeId = storeIdMatch.Groups[1].Value.Trim();
+                                string name = nameMatch.Success ? nameMatch.Groups[1].Value : Path.GetFileName(gameDir);
+                                games.Add(new InstalledGame
+                                {
+                                    Id = storeId,
+                                    Name = name,
+                                    Source = "Xbox",
+                                    InstallPath = gameDir,
+                                    LaunchUri = $"ms-windows-store://pdp/?ProductId={storeId}"
+                                });
+                            }
                         }
                     }
                     catch { }
@@ -138,44 +159,103 @@ public class LocalLibraryService
     public List<InstalledGame> GetInstalledEaGames()
     {
         var games = new List<InstalledGame>();
+        var searchRoots = new[] { Registry.LocalMachine, Registry.CurrentUser };
+        var registryPaths = new[] { @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall", @"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall" };
+
+        foreach (var root in searchRoots)
+        {
+            foreach (var regPath in registryPaths)
+            {
+                try
+                {
+                    using var key = root.OpenSubKey(regPath);
+                    if (key == null) continue;
+
+                    foreach (var subKeyName in key.GetSubKeyNames())
+                    {
+                        try
+                        {
+                            using var subKey = key.OpenSubKey(subKeyName);
+                            if (subKey == null) continue;
+
+                            string? publisher = subKey.GetValue("Publisher") as string;
+                            if (publisher != null && (publisher.Contains("Electronic Arts") || publisher.Contains("EA")))
+                            {
+                                string? name = subKey.GetValue("DisplayName") as string;
+                                string? installDir = subKey.GetValue("InstallLocation") as string;
+                                if (name != null && !string.IsNullOrEmpty(installDir))
+                                {
+                                    // Try to find ContentID in __Installer/installerdata.xml
+                                    string installerXml = Path.Combine(installDir, "__Installer", "installerdata.xml");
+                                    string? contentId = null;
+                                    if (File.Exists(installerXml))
+                                    {
+                                        var xml = File.ReadAllText(installerXml);
+                                        var match = System.Text.RegularExpressions.Regex.Match(xml, "<contentID>(.*?)</contentID>");
+                                        if (match.Success) contentId = match.Groups[1].Value;
+                                    }
+
+                                    if (contentId != null && !games.Any(g => g.Id == contentId))
+                                    {
+                                        games.Add(new InstalledGame
+                                        {
+                                            Id = contentId,
+                                            Name = name,
+                                            Source = "EA",
+                                            InstallPath = installDir,
+                                            LaunchUri = $"origin://launchgame/{contentId}"
+                                        });
+                                    }
+                                }
+                            }
+                        }
+                        catch { }
+                    }
+                }
+                catch { }
+            }
+        }
+        return games;
+    }
+
+    public List<InstalledGame> GetInstalledUbisoftGames()
+    {
+        var games = new List<InstalledGame>();
         try
         {
-            // EA usually stores info in C:\ProgramData\EA Desktop\Metadata or via AppData
-            // But NexusHub scans the installation folder for __Installer/installerdata.xml
-            // A more reliable way is checking the registry for EA Desktop installs
-            string keyPath = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall";
-            using var key = Registry.LocalMachine.OpenSubKey(keyPath);
-            if (key != null)
+            string keyPath = @"SOFTWARE\WOW6432Node\Ubisoft\Launcher\Installs";
+            using (var key = Registry.LocalMachine.OpenSubKey(keyPath))
             {
-                foreach (var subKeyName in key.GetSubKeyNames())
+                if (key != null)
                 {
-                    using var subKey = key.OpenSubKey(subKeyName);
-                    if (subKey != null)
+                    foreach (var subKeyName in key.GetSubKeyNames())
                     {
-                        string? publisher = subKey.GetValue("Publisher") as string;
-                        if (publisher == "Electronic Arts")
+                        using (var subKey = key.OpenSubKey(subKeyName))
                         {
-                            string? name = subKey.GetValue("DisplayName") as string;
-                            string? installDir = subKey.GetValue("InstallLocation") as string;
-                            if (name != null && !string.IsNullOrEmpty(installDir))
+                            if (subKey != null)
                             {
-                                // Try to find ContentID in __Installer/installerdata.xml
-                                string installerXml = Path.Combine(installDir, "__Installer", "installerdata.xml");
-                                string? contentId = null;
-                                if (File.Exists(installerXml))
+                                // Ubisoft usually stores the name in a "GameName" or similar value, but sometimes it's missing.
+                                // Let's try multiple ways to get the name.
+                                string? name = subKey.GetValue("Name") as string 
+                                            ?? subKey.GetValue("DisplayName") as string
+                                            ?? subKey.GetValue("GameName") as string;
+
+                                string? installDir = subKey.GetValue("InstallDir") as string;
+                                
+                                if (string.IsNullOrEmpty(name) && !string.IsNullOrEmpty(installDir))
                                 {
-                                    var xml = File.ReadAllText(installerXml);
-                                    var match = System.Text.RegularExpressions.Regex.Match(xml, "<contentID>(.*?)</contentID>");
-                                    if (match.Success) contentId = match.Groups[1].Value;
+                                    name = Path.GetFileName(installDir.TrimEnd('\\', '/'));
                                 }
+
+                                if (string.IsNullOrEmpty(name)) name = "Ubisoft Game " + subKeyName;
 
                                 games.Add(new InstalledGame
                                 {
-                                    Id = contentId ?? subKeyName,
+                                    Id = subKeyName,
                                     Name = name,
-                                    Source = "EA",
-                                    InstallPath = installDir,
-                                    LaunchUri = contentId != null ? $"origin://launchgame/{contentId}" : null
+                                    Source = "Ubisoft",
+                                    InstallPath = installDir ?? string.Empty,
+                                    LaunchUri = "uplay://launch/" + subKeyName + "/0"
                                 });
                             }
                         }
@@ -185,16 +265,6 @@ public class LocalLibraryService
         }
         catch { }
         return games;
-    }
-
-    private void Log(string message)
-    {
-        try
-        {
-            var path = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LegionDeck", "startup.log");
-            File.AppendAllText(path, $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - [Core.LibraryService] {message}\n");
-        }
-        catch { }
     }
 
     public List<InstalledGame> GetInstalledSteamGames()
@@ -234,7 +304,7 @@ public class LocalLibraryService
                     }
                 }
             }
-                catch { }
+            catch { }
         }
 
         return games;
@@ -244,7 +314,7 @@ public class LocalLibraryService
     {
         var games = new List<InstalledGame>();
         if (!Directory.Exists(path)) return games;
-        
+
         var manifestFiles = Directory.GetFiles(path, "appmanifest_*.acf");
 
         foreach (var file in manifestFiles)
@@ -273,47 +343,56 @@ public class LocalLibraryService
                     });
                 }
             }
-                catch { }
+            catch { }
         }
         return games;
     }
 
-    public List<InstalledGame> GetInstalledUbisoftGames()
+    public List<InstalledGame> GetInstalledEpicGames()
     {
         var games = new List<InstalledGame>();
         try
         {
-            string keyPath = "SOFTWARE\\WOW6432Node\\Ubisoft\\Launcher\\Installs";
-            using (var key = Registry.LocalMachine.OpenSubKey(keyPath))
+            string manifestPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "Epic", "EpicGamesLauncher", "Data", "Manifests");
+            if (Directory.Exists(manifestPath))
             {
-                if (key != null)
+                foreach (var file in Directory.GetFiles(manifestPath, "*.item"))
                 {
-                    foreach (var subKeyName in key.GetSubKeyNames())
+                    try
                     {
-                        using (var subKey = key.OpenSubKey(subKeyName))
+                        var content = File.ReadAllText(file);
+                        using var doc = System.Text.Json.JsonDocument.Parse(content);
+                        var root = doc.RootElement;
+                        string? name = root.GetProperty("DisplayName").GetString();
+                        string? appId = root.GetProperty("AppName").GetString();
+                        if (name != null && appId != null)
                         {
-                            if (subKey != null)
+                            games.Add(new InstalledGame
                             {
-                                string? installDir = subKey.GetValue("InstallDir") as string;
-                                if (!string.IsNullOrEmpty(installDir))
-                                {
-                                    string gameName = Path.GetFileName(installDir.TrimEnd('\\')) ?? "Ubisoft Game";
-                                    games.Add(new InstalledGame
-                                    {
-                                        Id = subKeyName,
-                                        Name = gameName,
-                                        Source = "Ubisoft",
-                                        InstallPath = installDir,
-                                        LaunchUri = "uplay://launch/" + subKeyName + "/0"
-                                    });
-                                }
-                            }
+                                Id = appId,
+                                Name = name,
+                                Source = "Epic",
+                                LaunchUri = $"com.epicgames.launcher://apps/{appId}?action=launch&silent=true"
+                            });
                         }
                     }
+                    catch { }
                 }
             }
         }
-            catch { }
+        catch { }
         return games;
+    }
+
+    private void Log(string message)
+    {
+        try
+        {
+            var path = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LegionDeck", "startup.log");
+            var dir = Path.GetDirectoryName(path);
+            if (dir != null) Directory.CreateDirectory(dir);
+            File.AppendAllText(path, $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - [Core.LibraryService] {message}\n");
+        }
+        catch { }
     }
 }
