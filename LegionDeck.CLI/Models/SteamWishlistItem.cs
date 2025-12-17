@@ -4,7 +4,7 @@ public class SteamWishlistItem
 {
     public int AppId { get; set; }
     public string Name { get; set; } = string.Empty;
-    public string? PlainId { get; set; } // Added PlainId property
+    public List<string> PlainIds { get; set; } = new List<string>();
     public string ImgCapsule { get; set; } = string.Empty;
     public string SmallCapsule { get; set; } = string.Empty;
     public string Type { get; set; } = string.Empty; // e.g., "Game", "DLC"
