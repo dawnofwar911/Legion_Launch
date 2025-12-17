@@ -39,7 +39,12 @@ public class LocalLibraryService
 
         if (!string.IsNullOrEmpty(uri))
         {
+            Log($"Attempting to launch {game.Name} ({game.Source}) via URI: {uri}");
             Process.Start(new ProcessStartInfo(uri) { UseShellExecute = true });
+        }
+        else
+        {
+            Log($"Failed to launch {game.Name} ({game.Source}): No URI or path determined.");
         }
         await Task.CompletedTask;
     }

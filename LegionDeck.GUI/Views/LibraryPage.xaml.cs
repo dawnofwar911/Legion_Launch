@@ -105,6 +105,7 @@ public sealed partial class LibraryPage : Page
     {
         if (e.ClickedItem is LibraryGameViewModel vm)
         {
+            Log($"Game clicked: {vm.Name} (Source: {vm.Source}, ID: {vm.GameData.Id})");
             await _libraryService.LaunchGameAsync(vm.GameData);
         }
     }
