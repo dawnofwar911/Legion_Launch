@@ -16,7 +16,15 @@ public sealed partial class MainPage : Page
     private void NavView_Loaded(object sender, RoutedEventArgs e)
     {
         // Set initial page
-        NavView.SelectedItem = NavView.MenuItems[0];
+        foreach (var item in NavView.MenuItems.OfType<NavigationViewItem>())
+        {
+            if (item.Tag?.ToString() == "Library")
+            {
+                NavView.SelectedItem = item;
+                ContentFrame.Navigate(typeof(LibraryPage));
+                break;
+            }
+        }
     }
 
     private void NavView_SelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
@@ -30,6 +38,9 @@ public sealed partial class MainPage : Page
             var tag = args.SelectedItemContainer.Tag.ToString();
             switch (tag)
             {
+                case "Library":
+                    ContentFrame.Navigate(typeof(LibraryPage));
+                    break;
                 case "Wishlist":
                     ContentFrame.Navigate(typeof(WishlistPage));
                     break;

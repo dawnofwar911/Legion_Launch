@@ -17,6 +17,7 @@
                         Loaded="NavView_Loaded"
                         SelectionChanged="NavView_SelectionChanged">
             <NavigationView.MenuItems>
+                <NavigationViewItem Content="Library" Tag="Library" Icon="AllApps" />
                 <NavigationViewItem Content="Wishlist" Tag="Wishlist" Icon="Favorite" />
                 <NavigationViewItem Content="Subscriptions" Tag="Subscriptions" Icon="Library" />
             </NavigationView.MenuItems>
