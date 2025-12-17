@@ -11,6 +11,7 @@ public sealed partial class SettingsPage : Page
     private readonly ConfigService _configService = new();
     private readonly SteamAuthService _steamAuth = new();
     private readonly XboxAuthService _xboxAuth = new();
+    private readonly UbisoftAuthService _ubisoftAuth = new();
 
     public SettingsPage()
     {
@@ -20,17 +21,19 @@ public sealed partial class SettingsPage : Page
 
     private void LoadSettings()
     {
-        ItadKeyBox.Text = _configService.GetApiKey("ITAD") ?? string.Empty;
+        ItadKeyBox.Password = _configService.GetApiKey("ITAD") ?? string.Empty;
+        SgdbKeyBox.Password = _configService.GetApiKey("SGDB") ?? string.Empty;
     }
 
     private void SaveSettings_Click(object sender, RoutedEventArgs e)
     {
-        var key = ItadKeyBox.Text.Trim();
-        if (!string.IsNullOrEmpty(key))
-        {
-            _configService.SetApiKey("ITAD", key);
-            ShowInfoBar("Success", "ITAD API Key saved.", InfoBarSeverity.Success);
-        }
+        var itadKey = ItadKeyBox.Password.Trim();
+        var sgdbKey = SgdbKeyBox.Password.Trim();
+
+        _configService.SetApiKey("ITAD", itadKey);
+        _configService.SetApiKey("SGDB", sgdbKey);
+        
+        ShowInfoBar("Success", "API Keys saved.", InfoBarSeverity.Success);
     }
 
     private async void SteamLogin_Click(object sender, RoutedEventArgs e)
@@ -65,9 +68,24 @@ public sealed partial class SettingsPage : Page
         }
     }
 
+    private async void UbisoftLogin_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var result = await _ubisoftAuth.LoginAsync();
+            if (result == "UbisoftLoggedIn")
+            {
+                ShowInfoBar("Ubisoft", "Successfully authenticated with Ubisoft+.", InfoBarSeverity.Success);
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowInfoBar("Error", $"Ubisoft Login failed: {ex.Message}", InfoBarSeverity.Error);
+        }
+    }
+
     private void ShowInfoBar(string title, string message, InfoBarSeverity severity)
     {
-        // We'll add an InfoBar to the XAML for feedback
         FeedbackInfoBar.Title = title;
         FeedbackInfoBar.Message = message;
         FeedbackInfoBar.Severity = severity;

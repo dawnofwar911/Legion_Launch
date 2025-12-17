@@ -37,32 +37,10 @@
           "buildTransitive/net6.0/_._": {}
         }
       },
-      "Microsoft.Web.WebView2/1.0.2210.55": {
+      "Microsoft.Web.WebView2/1.0.2849.39": {
         "type": "package",
-        "compile": {
-          "lib/netcoreapp3.0/Microsoft.Web.WebView2.Core.dll": {
-            "related": ".xml"
-          },
-          "lib/netcoreapp3.0/Microsoft.Web.WebView2.WinForms.dll": {
-            "related": ".xml"
-          },
-          "lib/netcoreapp3.0/Microsoft.Web.WebView2.Wpf.dll": {
-            "related": ".xml"
-          }
-        },
-        "runtime": {
-          "lib/netcoreapp3.0/Microsoft.Web.WebView2.Core.dll": {
-            "related": ".xml"
-          },
-          "lib/netcoreapp3.0/Microsoft.Web.WebView2.WinForms.dll": {
-            "related": ".xml"
-          },
-          "lib/netcoreapp3.0/Microsoft.Web.WebView2.Wpf.dll": {
-            "related": ".xml"
-          }
-        },
         "build": {
-          "build/Microsoft.Web.WebView2.targets": {}
+          "buildTransitive/Microsoft.Web.WebView2.targets": {}
         },
         "runtimeTargets": {
           "runtimes/win-arm64/native/WebView2Loader.dll": {
@@ -189,7 +167,7 @@
         "framework": ".NETCoreApp,Version=v8.0",
         "dependencies": {
           "Microsoft.Extensions.DependencyInjection": "8.0.0",
-          "Microsoft.Web.WebView2": "1.0.2210.55"
+          "Microsoft.Web.WebView2": "1.0.2849.39"
         },
         "compile": {
           "bin/placeholder/LegionDeck.Core.dll": {}
@@ -238,35 +216,13 @@
           "buildTransitive/net6.0/_._": {}
         }
       },
-      "Microsoft.Web.WebView2/1.0.2210.55": {
+      "Microsoft.Web.WebView2/1.0.2849.39": {
         "type": "package",
-        "compile": {
-          "lib/netcoreapp3.0/Microsoft.Web.WebView2.Core.dll": {
-            "related": ".xml"
-          },
-          "lib/netcoreapp3.0/Microsoft.Web.WebView2.WinForms.dll": {
-            "related": ".xml"
-          },
-          "lib/netcoreapp3.0/Microsoft.Web.WebView2.Wpf.dll": {
-            "related": ".xml"
-          }
-        },
-        "runtime": {
-          "lib/netcoreapp3.0/Microsoft.Web.WebView2.Core.dll": {
-            "related": ".xml"
-          },
-          "lib/netcoreapp3.0/Microsoft.Web.WebView2.WinForms.dll": {
-            "related": ".xml"
-          },
-          "lib/netcoreapp3.0/Microsoft.Web.WebView2.Wpf.dll": {
-            "related": ".xml"
-          }
-        },
         "native": {
           "runtimes/win-arm64/native/WebView2Loader.dll": {}
         },
         "build": {
-          "build/Microsoft.Web.WebView2.targets": {}
+          "buildTransitive/Microsoft.Web.WebView2.targets": {}
         }
       },
       "Microsoft.Windows.SDK.BuildTools/10.0.22621.756": {
@@ -356,7 +312,7 @@
         "framework": ".NETCoreApp,Version=v8.0",
         "dependencies": {
           "Microsoft.Extensions.DependencyInjection": "8.0.0",
-          "Microsoft.Web.WebView2": "1.0.2210.55"
+          "Microsoft.Web.WebView2": "1.0.2849.39"
         },
         "compile": {
           "bin/placeholder/LegionDeck.Core.dll": {}
@@ -405,35 +361,13 @@
           "buildTransitive/net6.0/_._": {}
         }
       },
-      "Microsoft.Web.WebView2/1.0.2210.55": {
+      "Microsoft.Web.WebView2/1.0.2849.39": {
         "type": "package",
-        "compile": {
-          "lib/netcoreapp3.0/Microsoft.Web.WebView2.Core.dll": {
-            "related": ".xml"
-          },
-          "lib/netcoreapp3.0/Microsoft.Web.WebView2.WinForms.dll": {
-            "related": ".xml"
-          },
-          "lib/netcoreapp3.0/Microsoft.Web.WebView2.Wpf.dll": {
-            "related": ".xml"
-          }
-        },
-        "runtime": {
-          "lib/netcoreapp3.0/Microsoft.Web.WebView2.Core.dll": {
-            "related": ".xml"
-          },
-          "lib/netcoreapp3.0/Microsoft.Web.WebView2.WinForms.dll": {
-            "related": ".xml"
-          },
-          "lib/netcoreapp3.0/Microsoft.Web.WebView2.Wpf.dll": {
-            "related": ".xml"
-          }
-        },
         "native": {
           "runtimes/win-x64/native/WebView2Loader.dll": {}
         },
         "build": {
-          "build/Microsoft.Web.WebView2.targets": {}
+          "buildTransitive/Microsoft.Web.WebView2.targets": {}
         }
       },
       "Microsoft.Windows.SDK.BuildTools/10.0.22621.756": {
@@ -523,7 +457,7 @@
         "framework": ".NETCoreApp,Version=v8.0",
         "dependencies": {
           "Microsoft.Extensions.DependencyInjection": "8.0.0",
-          "Microsoft.Web.WebView2": "1.0.2210.55"
+          "Microsoft.Web.WebView2": "1.0.2849.39"
         },
         "compile": {
           "bin/placeholder/LegionDeck.Core.dll": {}
@@ -572,35 +506,13 @@
           "buildTransitive/net6.0/_._": {}
         }
       },
-      "Microsoft.Web.WebView2/1.0.2210.55": {
+      "Microsoft.Web.WebView2/1.0.2849.39": {
         "type": "package",
-        "compile": {
-          "lib/netcoreapp3.0/Microsoft.Web.WebView2.Core.dll": {
-            "related": ".xml"
-          },
-          "lib/netcoreapp3.0/Microsoft.Web.WebView2.WinForms.dll": {
-            "related": ".xml"
-          },
-          "lib/netcoreapp3.0/Microsoft.Web.WebView2.Wpf.dll": {
-            "related": ".xml"
-          }
-        },
-        "runtime": {
-          "lib/netcoreapp3.0/Microsoft.Web.WebView2.Core.dll": {
-            "related": ".xml"
-          },
-          "lib/netcoreapp3.0/Microsoft.Web.WebView2.WinForms.dll": {
-            "related": ".xml"
-          },
-          "lib/netcoreapp3.0/Microsoft.Web.WebView2.Wpf.dll": {
-            "related": ".xml"
-          }
-        },
         "native": {
           "runtimes/win-x86/native/WebView2Loader.dll": {}
         },
         "build": {
-          "build/Microsoft.Web.WebView2.targets": {}
+          "buildTransitive/Microsoft.Web.WebView2.targets": {}
         }
       },
       "Microsoft.Windows.SDK.BuildTools/10.0.22621.756": {
@@ -690,7 +602,7 @@
         "framework": ".NETCoreApp,Version=v8.0",
         "dependencies": {
           "Microsoft.Extensions.DependencyInjection": "8.0.0",
-          "Microsoft.Web.WebView2": "1.0.2210.55"
+          "Microsoft.Web.WebView2": "1.0.2849.39"
         },
         "compile": {
           "bin/placeholder/LegionDeck.Core.dll": {}
@@ -769,10 +681,10 @@
         "useSharedDesignerContext.txt"
       ]
     },
-    "Microsoft.Web.WebView2/1.0.2210.55": {
-      "sha512": "pb5kuzl8TQm+ztzOnOm/qX75DXXjOQMdKlcs2hyizbZobiGzJcMcIhpmMmgg1cTGYwof2fVhlC809YScvDbm3w==",
+    "Microsoft.Web.WebView2/1.0.2849.39": {
+      "sha512": "mWyurCfuOGF2odk+Orflzpk017oBmLy11qiQTXpcc9ZWqhx2SfYDr2izplyxy2bCkWDSXCQpBDhU5u9+mhHlDQ==",
       "type": "package",
-      "path": "microsoft.web.webview2/1.0.2210.55",
+      "path": "microsoft.web.webview2/1.0.2849.39",
       "hasTools": true,
       "files": [
         ".nupkg.metadata",
@@ -800,20 +712,25 @@
         "build/native/x86/WebView2Loader.dll.lib",
         "build/native/x86/WebView2LoaderStatic.lib",
         "build/wv2winrt.targets",
+        "buildTransitive/Microsoft.Web.WebView2.targets",
         "lib/Microsoft.Web.WebView2.Core.winmd",
-        "lib/net45/Microsoft.Web.WebView2.Core.dll",
-        "lib/net45/Microsoft.Web.WebView2.Core.xml",
-        "lib/net45/Microsoft.Web.WebView2.WinForms.dll",
-        "lib/net45/Microsoft.Web.WebView2.WinForms.xml",
-        "lib/net45/Microsoft.Web.WebView2.Wpf.dll",
-        "lib/net45/Microsoft.Web.WebView2.Wpf.xml",
-        "lib/netcoreapp3.0/Microsoft.Web.WebView2.Core.dll",
-        "lib/netcoreapp3.0/Microsoft.Web.WebView2.Core.xml",
-        "lib/netcoreapp3.0/Microsoft.Web.WebView2.WinForms.dll",
-        "lib/netcoreapp3.0/Microsoft.Web.WebView2.WinForms.xml",
-        "lib/netcoreapp3.0/Microsoft.Web.WebView2.Wpf.dll",
-        "lib/netcoreapp3.0/Microsoft.Web.WebView2.Wpf.xml",
-        "microsoft.web.webview2.1.0.2210.55.nupkg.sha512",
+        "lib/net462/Microsoft.Web.WebView2.Core.dll",
+        "lib/net462/Microsoft.Web.WebView2.Core.xml",
+        "lib/net462/Microsoft.Web.WebView2.WinForms.dll",
+        "lib/net462/Microsoft.Web.WebView2.WinForms.xml",
+        "lib/net462/Microsoft.Web.WebView2.Wpf.dll",
+        "lib/net462/Microsoft.Web.WebView2.Wpf.xml",
+        "lib_manual/net5.0-windows10.0.17763.0/Microsoft.Web.WebView2.Wpf.dll",
+        "lib_manual/net5.0-windows10.0.17763.0/Microsoft.Web.WebView2.Wpf.xml",
+        "lib_manual/net6.0-windows10.0.17763.0/Microsoft.Web.WebView2.Core.Projection.dll",
+        "lib_manual/net8.0-windows10.0.17763.0/Microsoft.Web.WebView2.Core.Projection.dll",
+        "lib_manual/netcoreapp3.0/Microsoft.Web.WebView2.Core.dll",
+        "lib_manual/netcoreapp3.0/Microsoft.Web.WebView2.Core.xml",
+        "lib_manual/netcoreapp3.0/Microsoft.Web.WebView2.WinForms.dll",
+        "lib_manual/netcoreapp3.0/Microsoft.Web.WebView2.WinForms.xml",
+        "lib_manual/netcoreapp3.0/Microsoft.Web.WebView2.Wpf.dll",
+        "lib_manual/netcoreapp3.0/Microsoft.Web.WebView2.Wpf.xml",
+        "microsoft.web.webview2.1.0.2849.39.nupkg.sha512",
         "microsoft.web.webview2.nuspec",
         "runtimes/win-arm64/native/WebView2Loader.dll",
         "runtimes/win-arm64/native_uap/Microsoft.Web.WebView2.Core.dll",
@@ -1719,7 +1636,7 @@
   "projectFileDependencyGroups": {
     "net8.0-windows10.0.19041": [
       "LegionDeck.Core >= 1.0.0",
-      "Microsoft.Web.WebView2 >= 1.0.2210.55",
+      "Microsoft.Web.WebView2 >= 1.0.2849.39",
       "Microsoft.Windows.SDK.BuildTools >= 10.0.22621.756",
       "Microsoft.WindowsAppSDK >= 1.5.240428000"
     ]
@@ -1781,7 +1698,7 @@
         "dependencies": {
           "Microsoft.Web.WebView2": {
             "target": "Package",
-            "version": "[1.0.2210.55, )"
+            "version": "[1.0.2849.39, )"
           },
           "Microsoft.Windows.SDK.BuildTools": {
             "target": "Package",

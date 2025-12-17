@@ -1,3 +1,4 @@
+C:\Git Repos\Legion_Launch\LegionDeck.GUI\bin\x64\Debug\net8.0-windows10.0.19041.0\win-x64\Microsoft.Web.WebView2.Core.dll
 C:\Git Repos\Legion_Launch\LegionDeck.GUI\bin\x64\Debug\net8.0-windows10.0.19041.0\win-x64\App.xbf
 C:\Git Repos\Legion_Launch\LegionDeck.GUI\bin\x64\Debug\net8.0-windows10.0.19041.0\win-x64\Views\MainPage.xbf
 C:\Git Repos\Legion_Launch\LegionDeck.GUI\bin\x64\Debug\net8.0-windows10.0.19041.0\win-x64\Views\SettingsPage.xbf
@@ -32,7 +33,6 @@ C:\Git Repos\Legion_Launch\LegionDeck.GUI\bin\x64\Debug\net8.0-windows10.0.19041
 C:\Git Repos\Legion_Launch\LegionDeck.GUI\bin\x64\Debug\net8.0-windows10.0.19041.0\win-x64\Microsoft.UI.Xaml.Phone.dll
 C:\Git Repos\Legion_Launch\LegionDeck.GUI\bin\x64\Debug\net8.0-windows10.0.19041.0\win-x64\Microsoft.ui.xaml.resources.19h1.dll
 C:\Git Repos\Legion_Launch\LegionDeck.GUI\bin\x64\Debug\net8.0-windows10.0.19041.0\win-x64\Microsoft.ui.xaml.resources.common.dll
-C:\Git Repos\Legion_Launch\LegionDeck.GUI\bin\x64\Debug\net8.0-windows10.0.19041.0\win-x64\Microsoft.Web.WebView2.Core.dll
 C:\Git Repos\Legion_Launch\LegionDeck.GUI\bin\x64\Debug\net8.0-windows10.0.19041.0\win-x64\Microsoft.Windows.ApplicationModel.Resources.dll
 C:\Git Repos\Legion_Launch\LegionDeck.GUI\bin\x64\Debug\net8.0-windows10.0.19041.0\win-x64\Microsoft.Windows.Widgets.dll
 C:\Git Repos\Legion_Launch\LegionDeck.GUI\bin\x64\Debug\net8.0-windows10.0.19041.0\win-x64\Microsoft.WindowsAppRuntime.Bootstrap.dll
@@ -246,8 +246,6 @@ C:\Git Repos\Legion_Launch\LegionDeck.GUI\bin\x64\Debug\net8.0-windows10.0.19041
 C:\Git Repos\Legion_Launch\LegionDeck.GUI\bin\x64\Debug\net8.0-windows10.0.19041.0\win-x64\resources.pri
 C:\Git Repos\Legion_Launch\LegionDeck.GUI\bin\x64\Debug\net8.0-windows10.0.19041.0\win-x64\Microsoft.Extensions.DependencyInjection.dll
 C:\Git Repos\Legion_Launch\LegionDeck.GUI\bin\x64\Debug\net8.0-windows10.0.19041.0\win-x64\Microsoft.Extensions.DependencyInjection.Abstractions.dll
-C:\Git Repos\Legion_Launch\LegionDeck.GUI\bin\x64\Debug\net8.0-windows10.0.19041.0\win-x64\Microsoft.Web.WebView2.WinForms.dll
-C:\Git Repos\Legion_Launch\LegionDeck.GUI\bin\x64\Debug\net8.0-windows10.0.19041.0\win-x64\Microsoft.Web.WebView2.Wpf.dll
 C:\Git Repos\Legion_Launch\LegionDeck.GUI\bin\x64\Debug\net8.0-windows10.0.19041.0\win-x64\Microsoft.InteractiveExperiences.Projection.dll
 C:\Git Repos\Legion_Launch\LegionDeck.GUI\bin\x64\Debug\net8.0-windows10.0.19041.0\win-x64\Microsoft.WinUI.dll
 C:\Git Repos\Legion_Launch\LegionDeck.GUI\bin\x64\Debug\net8.0-windows10.0.19041.0\win-x64\Microsoft.Windows.AppLifecycle.Projection.dll
@@ -726,7 +724,11 @@ C:\Git Repos\Legion_Launch\LegionDeck.GUI\bin\x64\Debug\net8.0-windows10.0.19041
 C:\Git Repos\Legion_Launch\LegionDeck.GUI\bin\x64\Debug\net8.0-windows10.0.19041.0\win-x64\Microsoft.Windows.SDK.NET.dll
 C:\Git Repos\Legion_Launch\LegionDeck.GUI\bin\x64\Debug\net8.0-windows10.0.19041.0\win-x64\WinRT.Runtime.dll
 C:\Git Repos\Legion_Launch\LegionDeck.GUI\bin\x64\Debug\net8.0-windows10.0.19041.0\win-x64\LegionDeck.Core.dll
+C:\Git Repos\Legion_Launch\LegionDeck.GUI\bin\x64\Debug\net8.0-windows10.0.19041.0\win-x64\Microsoft.Web.WebView2.Core.Projection.dll
+C:\Git Repos\Legion_Launch\LegionDeck.GUI\bin\x64\Debug\net8.0-windows10.0.19041.0\win-x64\Microsoft.Web.WebView2.WinForms.dll
 C:\Git Repos\Legion_Launch\LegionDeck.GUI\bin\x64\Debug\net8.0-windows10.0.19041.0\win-x64\LegionDeck.Core.pdb
+C:\Git Repos\Legion_Launch\LegionDeck.GUI\bin\x64\Debug\net8.0-windows10.0.19041.0\win-x64\Microsoft.Web.WebView2.WinForms.xml
+C:\Git Repos\Legion_Launch\LegionDeck.GUI\bin\x64\Debug\net8.0-windows10.0.19041.0\win-x64\Microsoft.Web.WebView2.Core.xml
 C:\Git Repos\Legion_Launch\LegionDeck.GUI\bin\x64\Debug\net8.0-windows10.0.19041.0\win-x64\Microsoft.UI.Xaml.Controls.pri
 C:\Git Repos\Legion_Launch\LegionDeck.GUI\obj\x64\Debug\net8.0-windows10.0.19041.0\win-x64\LegionDeck.GUI.csproj.AssemblyReference.cache
 C:\Git Repos\Legion_Launch\LegionDeck.GUI\obj\x64\Debug\net8.0-windows10.0.19041.0\win-x64\App.g.i.cs

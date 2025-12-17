@@ -14,14 +14,20 @@
 
         <StackPanel Spacing="8">
             <TextBlock Text="IsThereAnyDeal (ITAD) API Key" Style="{ThemeResource BodyStrongTextBlockStyle}" />
-            <TextBox x:ConnectionId='5' x:Name="ItadKeyBox" PlaceholderText="Enter API Key" Width="400" HorizontalAlignment="Left" />
-            <Button x:ConnectionId='6' Content="Save Key"                            />
+            <PasswordBox x:ConnectionId='8' x:Name="ItadKeyBox" PlaceholderText="Enter ITAD Key" Width="400" HorizontalAlignment="Left" PasswordRevealMode="Hidden" />
         </StackPanel>
 
         <StackPanel Spacing="8">
-            <TextBlock Text="Authentication" Style="{ThemeResource BodyStrongTextBlockStyle}" />
-            <Button x:ConnectionId='3' Content="Login to Steam"                          />
-            <Button x:ConnectionId='4' Content="Login to Xbox"                         />
+            <TextBlock Text="SteamGridDB (SGDB) API Key" Style="{ThemeResource BodyStrongTextBlockStyle}" />
+            <PasswordBox x:ConnectionId='6' x:Name="SgdbKeyBox" PlaceholderText="Enter SGDB Key" Width="400" HorizontalAlignment="Left" PasswordRevealMode="Hidden" />
+            <Button x:ConnectionId='7' Content="Save Keys"                            />
+        </StackPanel>
+
+        <StackPanel Spacing="12">
+            <TextBlock Text="Authentication" Style="{ThemeResource BodyStrongTextBlockStyle}" Margin="0,10,0,0" />
+            <Button x:ConnectionId='3' Content="Login to Steam"                          Width="200" />
+            <Button x:ConnectionId='4' Content="Login to Xbox"                         Width="200" />
+            <Button x:ConnectionId='5' Content="Login to Ubisoft+"                            Width="200" />
         </StackPanel>
     </StackPanel>
 </Page>

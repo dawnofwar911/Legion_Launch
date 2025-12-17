@@ -17,36 +17,30 @@
                   x:Name="WishlistGridView"
                   Margin="12"
                   Padding="0,0,0,24"
-                  SelectionMode="None"
-                  IsItemClickEnabled="True">
+                  SelectionMode="Single"
+                  IsItemClickEnabled="True"
+                  XYFocusKeyboardNavigation="Enabled">
             <GridView.ItemTemplate>
                 <DataTemplate x:DataType="local:SteamWishlistItemViewModel">
-                    <Grid Width="220" Height="320" Margin="8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" CornerRadius="8" BorderThickness="1" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}">
+                    <Grid Width="180" Height="340" Margin="8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" CornerRadius="8">
                         <StackPanel Padding="0" Spacing="0">
-                            <Image Source="{x:Bind ImgCapsule}" Height="120" Stretch="UniformToFill" />
-                            
-                            <StackPanel Padding="12" Spacing="8">
-                                <TextBlock Text="{x:Bind Name}" FontWeight="Bold" TextWrapping="Wrap" MaxLines="2" Height="40" />
-                                
-                                <TextBlock Text="{x:Bind AccessStatus}" 
-                                           Visibility="{x:Bind AccessVisibility}" 
-                                           Foreground="#FF2ECC71" 
-                                           FontWeight="ExtraBold" 
-                                           FontSize="12" />
-
-                                <StackPanel Orientation="Horizontal" Spacing="6">
-                                    <Border Background="#FF107C10" CornerRadius="4" Padding="6,2" Visibility="{x:Bind GamePassVisibility}">
-                                        <TextBlock Text="GP" FontSize="10" Foreground="White" FontWeight="Bold" />
+                            <Grid Height="240" Background="{ThemeResource ControlFillColorSecondaryBrush}" CornerRadius="8,8,0,0">
+                                <Image Source="{x:Bind ImgCapsule}" Stretch="UniformToFill" />
+                            </Grid>
+                            <StackPanel Padding="10" Spacing="4">
+                                <TextBlock Text="{x:Bind Name}" FontWeight="Bold" MaxLines="1" TextTrimming="CharacterEllipsis" />
+                                <TextBlock Text="{x:Bind AccessStatus}" Visibility="{x:Bind AccessVisibility}" Foreground="Green" FontWeight="Bold" FontSize="11" />
+                                <StackPanel Orientation="Horizontal" Spacing="4">
+                                    <Border Background="DarkGreen" CornerRadius="4" Padding="4,1" Visibility="{x:Bind GamePassVisibility}">
+                                        <TextBlock Text="GP" FontSize="9" Foreground="White" />
                                     </Border>
-                                    <Border Background="#FFFF3E24" CornerRadius="4" Padding="6,2" Visibility="{x:Bind EaPlayVisibility}">
-                                        <TextBlock Text="EA" FontSize="10" Foreground="White" FontWeight="Bold" />
+                                    <Border Background="Red" CornerRadius="4" Padding="4,1" Visibility="{x:Bind EaPlayVisibility}">
+                                        <TextBlock Text="EA" FontSize="9" Foreground="White" />
                                     </Border>
-                                    <Border Background="#FF0072CE" CornerRadius="4" Padding="6,2" Visibility="{x:Bind UbisoftPlusVisibility}">
-                                        <TextBlock Text="U+" FontSize="10" Foreground="White" FontWeight="Bold" />
+                                    <Border Background="Blue" CornerRadius="4" Padding="4,1" Visibility="{x:Bind UbisoftPlusVisibility}">
+                                        <TextBlock Text="U+" FontSize="9" Foreground="White" />
                                     </Border>
                                 </StackPanel>
-                                
-                                <TextBlock Text="{x:Bind AppId}" FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Bottom" />
                             </StackPanel>
                         </StackPanel>
                     </Grid>

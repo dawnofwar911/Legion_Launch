@@ -10,43 +10,37 @@
 
     <Grid RowDefinitions="Auto,*">
         <CommandBar Grid.Row="0" DefaultLabelPosition="Right">
-            <AppBarButton x:ConnectionId='13' Icon="Refresh" Label="Sync Wishlist"                          />
+            <AppBarButton x:ConnectionId='12' Icon="Refresh" Label="Sync Wishlist"                          />
         </CommandBar>
 
         <GridView x:ConnectionId='2' Grid.Row="1"
                   x:Name="WishlistGridView"
                   Margin="12"
                   Padding="0,0,0,24"
-                  SelectionMode="None"
-                  IsItemClickEnabled="True">
+                  SelectionMode="Single"
+                  IsItemClickEnabled="True"
+                  XYFocusKeyboardNavigation="Enabled">
             <GridView.ItemTemplate>
                 <DataTemplate                                              >
-                    <Grid x:ConnectionId='5' Width="220" Height="320" Margin="8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" CornerRadius="8" BorderThickness="1" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}">
+                    <Grid x:ConnectionId='5' Width="180" Height="340" Margin="8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" CornerRadius="8">
                         <StackPanel Padding="0" Spacing="0">
-                            <Image x:ConnectionId='6'                              Height="120" Stretch="UniformToFill" />
-                            
-                            <StackPanel Padding="12" Spacing="8">
-                                <TextBlock x:ConnectionId='7'                      FontWeight="Bold" TextWrapping="Wrap" MaxLines="2" Height="40" />
-                                
-                                <TextBlock x:ConnectionId='8'                              
-                                                                                  
-                                           Foreground="#FF2ECC71" 
-                                           FontWeight="ExtraBold" 
-                                           FontSize="12" />
-
-                                <StackPanel Orientation="Horizontal" Spacing="6">
-                                    <Border x:ConnectionId='10' Background="#FF107C10" CornerRadius="4" Padding="6,2"                                         >
-                                        <TextBlock Text="GP" FontSize="10" Foreground="White" FontWeight="Bold" />
+                            <Grid Height="240" Background="{ThemeResource ControlFillColorSecondaryBrush}" CornerRadius="8,8,0,0">
+                                <Image x:ConnectionId='11'                              Stretch="UniformToFill" />
+                            </Grid>
+                            <StackPanel Padding="10" Spacing="4">
+                                <TextBlock x:ConnectionId='6'                      FontWeight="Bold" MaxLines="1" TextTrimming="CharacterEllipsis" />
+                                <TextBlock x:ConnectionId='7'                                                                     Foreground="Green" FontWeight="Bold" FontSize="11" />
+                                <StackPanel Orientation="Horizontal" Spacing="4">
+                                    <Border x:ConnectionId='8' Background="DarkGreen" CornerRadius="4" Padding="4,1"                                         >
+                                        <TextBlock Text="GP" FontSize="9" Foreground="White" />
                                     </Border>
-                                    <Border x:ConnectionId='11' Background="#FFFF3E24" CornerRadius="4" Padding="6,2"                                       >
-                                        <TextBlock Text="EA" FontSize="10" Foreground="White" FontWeight="Bold" />
+                                    <Border x:ConnectionId='9' Background="Red" CornerRadius="4" Padding="4,1"                                       >
+                                        <TextBlock Text="EA" FontSize="9" Foreground="White" />
                                     </Border>
-                                    <Border x:ConnectionId='12' Background="#FF0072CE" CornerRadius="4" Padding="6,2"                                            >
-                                        <TextBlock Text="U+" FontSize="10" Foreground="White" FontWeight="Bold" />
+                                    <Border x:ConnectionId='10' Background="Blue" CornerRadius="4" Padding="4,1"                                            >
+                                        <TextBlock Text="U+" FontSize="9" Foreground="White" />
                                     </Border>
                                 </StackPanel>
-                                
-                                <TextBlock x:ConnectionId='9'                       FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Bottom" />
                             </StackPanel>
                         </StackPanel>
                     </Grid>

@@ -19,6 +19,6 @@
   </ImportGroup>
   <PropertyGroup Condition=" '$(ExcludeRestorePackageImports)' != 'true' ">
     <PkgMicrosoft_WindowsAppSDK Condition=" '$(PkgMicrosoft_WindowsAppSDK)' == '' ">C:\Users\alexa\.nuget\packages\microsoft.windowsappsdk\1.5.240428000</PkgMicrosoft_WindowsAppSDK>
-    <PkgMicrosoft_Web_WebView2 Condition=" '$(PkgMicrosoft_Web_WebView2)' == '' ">C:\Users\alexa\.nuget\packages\microsoft.web.webview2\1.0.2210.55</PkgMicrosoft_Web_WebView2>
+    <PkgMicrosoft_Web_WebView2 Condition=" '$(PkgMicrosoft_Web_WebView2)' == '' ">C:\Users\alexa\.nuget\packages\microsoft.web.webview2\1.0.2849.39</PkgMicrosoft_Web_WebView2>
   </PropertyGroup>
 </Project>

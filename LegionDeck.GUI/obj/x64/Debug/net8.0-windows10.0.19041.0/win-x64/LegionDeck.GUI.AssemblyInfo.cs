@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("LegionDeck.GUI")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+3040abbfbe30d0ba72a44a0567ee0a33ce4f758c")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+fa8d05371cf0819918a18bd42a98640a7ed2458e")]
 [assembly: System.Reflection.AssemblyProductAttribute("LegionDeck.GUI")]
 [assembly: System.Reflection.AssemblyTitleAttribute("LegionDeck.GUI")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
