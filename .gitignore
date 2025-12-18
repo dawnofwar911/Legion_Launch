@@ -30,3 +30,7 @@ ARM64/
 node_modules/
 dist/
 dist-electron/
+
+# Ignored Projects/Folders
+NexusHub/
+PlayniteExtensions_Temp/
