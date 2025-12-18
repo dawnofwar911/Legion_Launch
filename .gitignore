@@ -34,3 +34,6 @@ dist-electron/
 # Ignored Projects/Folders
 NexusHub/
 PlayniteExtensions_Temp/
+
+# Temporary Files
+.tmp/
