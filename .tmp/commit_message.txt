@@ -1,0 +1,12 @@
+feat: Improve ITAD plain ID matching and subscription status accuracy
+
+This commit introduces several improvements to the integration with the IsThereAnyDeal (ITAD) API to enhance the accuracy of game plain ID matching and subscription status reporting:
+
+- **Refactored SteamWishlistItem.PlainIds:** Changed `PlainId` to `PlainIds` (List<string>) to support multiple ITAD plain IDs per game, addressing initial build errors and allowing for more comprehensive subscription checks.
+- **Enabled ITAD Title Deserialization:** Added `[JsonPropertyName("title")]` to `ItadGameLookupItem.Title` to correctly deserialize game titles from the ITAD API, resolving issues where titles were appearing as empty.
+- **Enhanced Fuzzy Matching Logic:** Overhauled `GetPlainIdsAsync` to implement a robust scoring mechanism for matching Steam game titles with ITAD entries. This logic now:
+    - Calculates a score for each potential ITAD match based on exactness, prefix matching (for editions), and contains-based matching.
+    - Filters out non-game content (e.g., currency packs, soundtracks, DLC) when selecting edition-based matches to prevent false positives.
+    - Returns all ITAD plain IDs that achieve a score of 50 or higher, ensuring that all relevant editions or versions of a game are considered for subscription status, without increasing the number of ITAD API calls for subscription checks.
+
+These changes resolve issues where games were incorrectly flagged as being on or off subscription services due to imprecise plain ID selection.

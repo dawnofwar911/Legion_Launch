@@ -11,6 +11,17 @@ namespace LegionDeck.Core.Services;
 
 public class XboxAuthService : IAuthService
 {
+    public void ClearCookies()
+    {
+        try
+        {
+            var authTokensPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LegionDeck", "AuthTokens");
+            var cookiePath = Path.Combine(authTokensPath, "xbox_cookies.json");
+            if (File.Exists(cookiePath)) File.Delete(cookiePath);
+        }
+        catch { }
+    }
+
     public Task<string?> LoginAsync()
     {
         var tcs = new TaskCompletionSource<string?>();

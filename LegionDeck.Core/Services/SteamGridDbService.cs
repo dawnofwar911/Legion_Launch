@@ -46,6 +46,108 @@ public class SteamGridDbService
         public int Score { get; set; }
     }
 
+    public class SgdbGame
+    {
+        [JsonPropertyName("id")]
+        public int Id { get; set; }
+        [JsonPropertyName("name")]
+        public string? Name { get; set; }
+    }
+
+    private void Log(string message)
+    {
+        try
+        {
+            var path = System.IO.Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.LocalApplicationData), "LegionDeck", "startup.log");
+            System.IO.File.AppendAllText(path, $"{System.DateTime.Now:yyyy-MM-dd HH:mm:ss} - [SGDB] {message}\n");
+        }
+        catch { }
+    }
+
+    public async Task<int?> SearchGameIdAsync(string gameName)
+    {
+        EnsureApiKey();
+        if (string.IsNullOrEmpty(_apiKey)) 
+        {
+            Log("API Key is missing or empty.");
+            return null;
+        }
+
+        var url = $"{BaseUrl}search/autocomplete/{Uri.EscapeDataString(gameName)}";
+        try
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, url);
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _apiKey);
+            
+            var response = await _httpClient.SendAsync(request);
+            if (!response.IsSuccessStatusCode) 
+            {
+                Log($"Search failed for '{gameName}'. Status: {response.StatusCode}");
+                return null;
+            }
+
+            var json = await response.Content.ReadAsStringAsync();
+            var result = JsonSerializer.Deserialize<SgdbResponse<List<SgdbGame>>>(json);
+
+            if (result?.Success == true && result.Data != null && result.Data.Any())
+            {
+                var id = result.Data.First().Id;
+                Log($"Found ID {id} for game '{gameName}'");
+                return id;
+            }
+            else
+            {
+                Log($"No results found for '{gameName}'");
+            }
+        }
+        catch (Exception ex)
+        {
+            Log($"Search Error for '{gameName}': {ex.Message}");
+        }
+        return null;
+    }
+
+    public async Task<string?> GetVerticalCoverByGameIdAsync(int gameId)
+    {
+        EnsureApiKey();
+        if (string.IsNullOrEmpty(_apiKey)) return null;
+
+        var url = $"{BaseUrl}grids/game/{gameId}?dimensions=600x900,342x482,660x930";
+        
+        try
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, url);
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _apiKey);
+            
+            var response = await _httpClient.SendAsync(request);
+            if (!response.IsSuccessStatusCode)
+            {
+                Log($"GetGrid failed for ID {gameId}. Status: {response.StatusCode}");
+                return null;
+            }
+
+            var json = await response.Content.ReadAsStringAsync();
+            var result = JsonSerializer.Deserialize<SgdbResponse<List<SgdbImage>>>(json);
+
+            if (result?.Success == true && result.Data != null && result.Data.Any())
+            {
+                var urlResult = result.Data.OrderByDescending(x => x.Score).FirstOrDefault()?.Url;
+                Log($"Found cover for ID {gameId}: {urlResult}");
+                return urlResult;
+            }
+            else
+            {
+                Log($"No cover found for ID {gameId}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Log($"GetGrid Error for ID {gameId}: {ex.Message}");
+        }
+
+        return null;
+    }
+
     public async Task<string?> GetVerticalCoverAsync(int steamAppId)
     {
         EnsureApiKey();

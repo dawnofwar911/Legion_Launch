@@ -18,6 +18,16 @@ public class SteamWishlistService
     }
 
 
+    private void Log(string message)
+    {
+        try
+        {
+            var path = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LegionDeck", "startup.log");
+            File.AppendAllText(path, $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - [SteamWishlistService] {message}\n");
+        }
+        catch { }
+    }
+
     public async Task<List<SteamWishlistItem>> GetWishlistAsync(string? specificSteamIdOrName = null)
     {
         var wishlist = new List<SteamWishlistItem>();
@@ -26,7 +36,7 @@ public class SteamWishlistService
         var steamCookieFilePath = Path.Combine(authTokensPath, "steam_cookies.json");
         
         var userDataUrl = "https://store.steampowered.com/dynamicstore/userdata/";
-        Console.WriteLine($"Attempting to fetch wishlist IDs from: {userDataUrl}");
+        Log($"Attempting to fetch wishlist IDs from: {userDataUrl}");
         
         var (userDataContent, userDataFinalUrl) = await SteamAuthService.FetchProtectedPageAsync(userDataUrl, steamCookieFilePath); 
         string processedResponse = userDataContent;
@@ -36,7 +46,8 @@ public class SteamWishlistService
         {
             if (userDataContent.Contains("login_btn_signin") || userDataContent.Contains("global_login_btn"))
             {
-                Console.WriteLine("[Debug] Dynamic Store returned login page HTML. Falling back to scraping.");
+                Log("Dynamic Store returned login page HTML.");
+                throw new UnauthorizedAccessException("Steam session expired or invalid.");
             }
             else if (processedResponse.Contains("<pre"))
             {
@@ -46,18 +57,17 @@ public class SteamWishlistService
                 {
                     processedResponse = processedResponse.Substring(preStart, preEnd - preStart);
                 }
-            } else if (!processedResponse.Trim().StartsWith("{") && !processedResponse.Trim().StartsWith("["))
+            } 
+            else if (!processedResponse.Trim().StartsWith("{") && !processedResponse.Trim().StartsWith("["))
             {
-                Console.WriteLine("[Debug] Dynamic Store returned unexpected non-JSON/non-HTML content.");
+                Log($"Dynamic Store returned unexpected non-JSON/non-HTML content. Start: {processedResponse.Substring(0, Math.Min(processedResponse.Length, 100))}");
             }
             else // It looks like JSON, try to parse
             {
- 
-                
                 using var doc = JsonDocument.Parse(processedResponse);
                 if (doc.RootElement.TryGetProperty("rgWishlist", out var rgWishlist))
                 {
-                    Console.WriteLine("Successfully retrieved wishlist IDs from Dynamic Store.");
+                    Log("Successfully retrieved wishlist IDs from Dynamic Store.");
                     foreach (var id in rgWishlist.EnumerateArray())
                     {
                         var appId = id.GetInt32();
@@ -70,23 +80,36 @@ public class SteamWishlistService
 
                     if (wishlist.Count == 0)
                     {
-                        Console.WriteLine("[Debug] rgWishlist array was empty.");
-                        Console.WriteLine($"[Debug] Full processed response: {processedResponse}");
+                        // Check if it looks like a guest session (empty owned apps usually means guest)
+                        if (doc.RootElement.TryGetProperty("rgOwnedApps", out var rgOwnedApps) && 
+                            rgOwnedApps.GetArrayLength() == 0)
+                        {
+                            Log("rgWishlist AND rgOwnedApps are empty. Assuming guest session (expired).");
+                            throw new UnauthorizedAccessException("Steam session appears to be Guest/Expired.");
+                        }
+
+                        Log("rgWishlist array was empty.");
+                        Log($"Full processed response snippet: {processedResponse.Substring(0, Math.Min(processedResponse.Length, 500))}");
                     }
+                }
+                else
+                {
+                     Log("JSON parsed but 'rgWishlist' property missing.");
+                     Log($"Full processed response snippet: {processedResponse.Substring(0, Math.Min(processedResponse.Length, 500))}");
                 }
             }
 
             if (wishlist.Count > 0)
             {
-                Console.WriteLine($"Found {wishlist.Count} items via Dynamic Store API.");
-                Console.WriteLine("DEBUG: Dynamic Store fetch successful, returning wishlist.");
+                Log($"Found {wishlist.Count} items via Dynamic Store API.");
                 return wishlist; 
             }
         }
+        catch (UnauthorizedAccessException) { throw; }
         catch (Exception ex)
         {
-            Console.WriteLine($"Dynamic Store fetch failed (will try fallback): {ex.Message}");
-            Console.WriteLine($"[Debug] Dynamic Store raw response (on error): {userDataContent.Substring(0, Math.Min(userDataContent.Length, 500))}");
+            Log($"Dynamic Store fetch failed: {ex.Message}");
+            Log($"Response content snippet: {userDataContent.Substring(0, Math.Min(userDataContent.Length, 500))}");
         }
         
         return wishlist;

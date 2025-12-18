@@ -27,6 +27,7 @@ public sealed partial class WishlistPage : Page
     private readonly EaDataService _eaData = new();
     private readonly UbisoftDataService _ubisoftData = new();
     private readonly HttpClient _httpClient = new();
+    private readonly SteamAuthService _steamAuth = new();
     
     private readonly string _cachePath;
 
@@ -44,8 +45,19 @@ public sealed partial class WishlistPage : Page
         this.Loaded += WishlistPage_Loaded;
     }
 
+    private void Log(string message)
+    {
+        try
+        {
+            var path = System.IO.Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.LocalApplicationData), "LegionDeck", "startup.log");
+            System.IO.File.AppendAllText(path, $"{System.DateTime.Now:yyyy-MM-dd HH:mm:ss} - [WishlistPage] {message}\n");
+        }
+        catch {{ }}
+    }
+
     private async void WishlistPage_Loaded(object sender, RoutedEventArgs e)
     {
+        Log("WishlistPage_Loaded started");
         if (Wishlist.Count == 0)
         {
             await LoadFromCache();
@@ -72,12 +84,17 @@ public sealed partial class WishlistPage : Page
                     {
                         Wishlist.Add(item);
                     }
+                    Log($"Loaded {Wishlist.Count} items from cache");
                 }
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Failed to load cache: {ex.Message}");
+                Log($"Failed to load cache: {ex.Message}");
             }
+        }
+        else
+        {
+            Log("No cache file found.");
         }
     }
 
@@ -88,10 +105,11 @@ public sealed partial class WishlistPage : Page
             Directory.CreateDirectory(Path.GetDirectoryName(_cachePath)!);
             var json = JsonSerializer.Serialize(items);
             await File.WriteAllTextAsync(_cachePath, json);
+            Log("Saved wishlist to cache");
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"Failed to save cache: {ex.Message}");
+            Log($"Failed to save cache: {ex.Message}");
         }
     }
 
@@ -104,18 +122,26 @@ public sealed partial class WishlistPage : Page
             var response = await _httpClient.SendAsync(request, cts.Token);
             return response.IsSuccessStatusCode;
         }
-        catch { return false; }
+        catch {{ return false; }}
     }
 
     private async void SyncButton_Click(object sender, RoutedEventArgs e)
     {
-        LoadingRing.IsActive = true;
-        Wishlist.Clear();
-        var processedItems = new ConcurrentBag<SteamWishlistItemViewModel>();
+        await SyncWishlistAsync();
+    }
 
+    private async Task SyncWishlistAsync(bool retryOnAuthFailure = true)
+    {
+        Log("SyncWishlistAsync started");
+        LoadingRing.IsActive = true;
+        
         try
         {
             var items = await _wishlistService.GetWishlistAsync();
+            Log($"Fetched {items.Count} items from SteamWishlistService");
+            
+            Wishlist.Clear(); // Clear old items only after successful fetch
+            var processedItems = new ConcurrentBag<SteamWishlistItemViewModel>();
             
             var gpStatus = await _xboxData.GetGamePassSubscriptionDetailsAsync();
             bool hasGP = gpStatus.Contains("Ultimate") || gpStatus.Contains("PC");
@@ -157,6 +183,21 @@ public sealed partial class WishlistPage : Page
 
                     if (!artFound)
                     {
+                        // Fallback: Try searching SGDB by name
+                        var gameId = await _sgdbService.SearchGameIdAsync(item.Name ?? $"Steam App {item.AppId}");
+                        if (gameId.HasValue)
+                        {
+                            var coverUrl = await _sgdbService.GetVerticalCoverByGameIdAsync(gameId.Value);
+                            if (!string.IsNullOrEmpty(coverUrl))
+                            {
+                                vm.ImgCapsule = coverUrl;
+                                artFound = true;
+                            }
+                        }
+                    }
+
+                    if (!artFound)
+                    {
                         vm.ImgCapsule = $"https://cdn.cloudflare.steamstatic.com/steam/apps/{item.AppId}/header.jpg";
                     }
 
@@ -178,20 +219,46 @@ public sealed partial class WishlistPage : Page
                     processedItems.Add(vm);
                     DispatcherQueue.TryEnqueue(() => Wishlist.Add(vm));
                 }
-                finally { semaphore.Release(); }
+                finally {{ semaphore.Release(); }}
             });
 
             await Task.WhenAll(tasks);
             await SaveToCache(processedItems.ToList());
+            Log("Sync completed successfully");
+        }
+        catch (UnauthorizedAccessException)
+        {
+            // Clear the invalid cookies so we force a fresh extraction
+            _steamAuth.ClearCookies();
+
+            if (retryOnAuthFailure)
+            {
+                Log("Steam session expired. Attempting silent refresh...");
+                // Use RefreshSessionAsync to try and renew cookies without showing a window
+                var success = await _steamAuth.RefreshSessionAsync();
+                if (success)
+                {
+                    Log("Silent refresh successful. Retrying sync...");
+                    await SyncWishlistAsync(false); // Retry once
+                }
+                else
+                {
+                     Log("Silent refresh failed. User interaction required (Login in Settings).");
+                }
+            }
+            else
+            {
+                Log("Steam session expired and retry failed.");
+            }
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"Error: {ex.Message}");
+            Log($"Error during sync: {ex.Message}\n{ex.StackTrace}");
         }
         finally
         {
-            LoadingRing.IsActive = false;
-        }
+            if (!retryOnAuthFailure || LoadingRing.IsActive) 
+                LoadingRing.IsActive = false;
         }
     }
-    
+}

@@ -13,6 +13,17 @@ namespace LegionDeck.Core.Services;
 
 public class UbisoftAuthService : IAuthService
 {
+    public void ClearCookies()
+    {
+        try
+        {
+            var authTokensPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LegionDeck", "AuthTokens");
+            var cookiePath = Path.Combine(authTokensPath, "ubisoft_cookies.json");
+            if (File.Exists(cookiePath)) File.Delete(cookiePath);
+        }
+        catch { }
+    }
+
     public Task<string?> LoginAsync()
     {
         var tcs = new TaskCompletionSource<string?>();

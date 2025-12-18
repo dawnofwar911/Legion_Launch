@@ -17,6 +17,34 @@ namespace LegionDeck.Core.Services;
 
 public class SteamAuthService : IAuthService
 {
+    private void Log(string message)
+    {
+        try
+        {
+            var path = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LegionDeck", "startup.log");
+            File.AppendAllText(path, $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - [SteamAuthService] {message}\n");
+        }
+        catch { }
+    }
+
+    public void ClearCookies()
+    {
+        try
+        {
+            var authTokensPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LegionDeck", "AuthTokens");
+            var cookiePath = Path.Combine(authTokensPath, "steam_cookies.json");
+            if (File.Exists(cookiePath))
+            {
+                File.Delete(cookiePath);
+                Log($"Deleted invalid/expired cookies at {cookiePath}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Log($"Failed to clear cookies: {ex.Message}");
+        }
+    }
+
     public Task<string?> LoginAsync()
     {
         var tcs = new TaskCompletionSource<string?>();
@@ -25,15 +53,18 @@ public class SteamAuthService : IAuthService
         {
             try
             {
+                Log("Starting interactive LoginAsync thread");
                 Application.SetHighDpiMode(HighDpiMode.SystemAware);
                 Application.EnableVisualStyles();
                 Application.SetCompatibleTextRenderingDefault(false);
 
                 var form = new SteamLoginForm(tcs, null); 
                 Application.Run(form);
+                Log("Interactive login form closed");
             }
             catch (Exception ex)
             {
+                Log($"LoginAsync thread exception: {ex.Message}");
                 tcs.TrySetException(ex);
             }
         });
@@ -52,6 +83,7 @@ public class SteamAuthService : IAuthService
         {
             try
             {
+                Log("Starting silent RefreshSessionAsync thread");
                 Application.SetHighDpiMode(HighDpiMode.SystemAware);
                 Application.EnableVisualStyles();
                 Application.SetCompatibleTextRenderingDefault(false);
@@ -59,9 +91,11 @@ public class SteamAuthService : IAuthService
                 // Use the new silent parameter
                 var form = new SteamLoginForm(tcs, null, silent: true); 
                 Application.Run(form);
+                Log("Silent refresh form closed");
             }
             catch (Exception ex)
             {
+                Log($"RefreshSessionAsync thread exception: {ex.Message}");
                 tcs.TrySetException(ex);
             }
         });
@@ -76,15 +110,18 @@ public class SteamAuthService : IAuthService
             try 
             {
                 var result = await tcs.Task;
+                Log($"RefreshSessionAsync result: {result}");
                 return result == "SteamLoggedIn";
             }
-            catch
+            catch (Exception ex)
             {
+                Log($"RefreshSessionAsync task exception: {ex.Message}");
                 return false;
             }
         }
         else
         {
+             Log("RefreshSessionAsync timed out");
              return false;
         }
     }
@@ -120,9 +157,10 @@ public class SteamAuthService : IAuthService
                             {
                                 // Clean domain for CookieContainer.SetCookies
                                 string cleanedDomain = domain.StartsWith(".") ? domain.Substring(1) : domain;
-                                // URL-encode the cookie value to handle problematic characters like comma
-                                string encodedValue = HttpUtility.UrlEncode(value);
-                                cookieContainer.Add(new Uri($"https://{cleanedDomain}"), new Cookie(name, encodedValue, path, cleanedDomain));
+                                
+                                // REVERT: Do NOT URL-encode. Pass raw value.
+                                // Common issue: Cookie values often contain encoded chars already. Double encoding breaks them.
+                                cookieContainer.Add(new Uri($"https://{cleanedDomain}"), new Cookie(name, value, path, cleanedDomain));
                             }
                         }
                         catch (Exception innerEx)
@@ -178,7 +216,7 @@ public class SteamAuthService : IAuthService
 public class SteamLoginForm : Form
 {
     private readonly TaskCompletionSource<string?>? _loginResultTcs;
-    private readonly TaskCompletionSource<(string pageContent, string finalUrl)>? _fetchResultTcs;
+    private readonly TaskCompletionSource<(string pageContent, string finalUrl)>? _fetchResultTcs;       
     private readonly string _targetUrl;
     private readonly string? _cookieJsonPath; 
     private readonly bool _isSilent;
@@ -216,6 +254,16 @@ public class SteamLoginForm : Form
         this.ShowInTaskbar = false; 
     }
 
+    private void Log(string message)
+    {
+        try
+        {
+            var path = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LegionDeck", "startup.log");
+            File.AppendAllText(path, $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - [SteamLoginForm] {message}\n");
+        }
+        catch {{ }}
+    }
+
     private void InitializeComponentCommon()
     {
         this.Width = 1024;
@@ -232,10 +280,13 @@ public class SteamLoginForm : Form
     {
         try
         {
+            Log("SteamLoginForm_Load started");
             var userDataFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LegionDeck", "WebView2");
-            var env = await CoreWebView2Environment.CreateAsync(null, userDataFolder);
+            Log($"Creating WebView2 environment with UserDataFolder: {userDataFolder}");
             
+            var env = await CoreWebView2Environment.CreateAsync(null, userDataFolder);
             await _webView.EnsureCoreWebView2Async(env);
+            Log("WebView2 initialized successfully");
 
             // Set a consistent User-Agent for the WebView2 instance
             _webView.CoreWebView2.Settings.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
@@ -274,14 +325,14 @@ public class SteamLoginForm : Form
                             }
                             catch (Exception innerEx)
                             {
-                                Console.WriteLine($"[Warning] Failed to inject specific cookie '{c.GetProperty("Name").GetString()}': {innerEx.Message}");
+                                Log($"[Warning] Failed to inject specific cookie '{{c.GetProperty(\"Name\").GetString()}}': {innerEx.Message}");
                             }
                         }
                     }
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"[Warning] Failed to parse/load cookies from JSON: {ex.Message}");
+                    Log($"[Warning] Failed to parse/load cookies from JSON: {ex.Message}");
                 }
             }
 
@@ -291,15 +342,16 @@ public class SteamLoginForm : Form
                 // If Silent (Refresh), we want to KEEP cookies to try and auto-login.
                 if (!_isSilent)
                 {
+                    Log("Interactive Login: Clearing old cookies to force login prompt.");
                     var cookieManager = _webView.CoreWebView2.CookieManager;
-                    cookieManager.DeleteCookiesWithDomainAndPath("steamcommunity.com", "/", null);
-                    cookieManager.DeleteCookiesWithDomainAndPath(".steamcommunity.com", "/", null);
+                    cookieManager.DeleteCookiesWithDomainAndPath("steamcommunity.com", "/", null);       
+                    cookieManager.DeleteCookiesWithDomainAndPath(".steamcommunity.com", "/", null);      
                     cookieManager.DeleteCookiesWithDomainAndPath("steampowered.com", "/", null);
                     cookieManager.DeleteCookiesWithDomainAndPath(".steampowered.com", "/", null);
-                    cookieManager.DeleteCookiesWithDomainAndPath("store.steampowered.com", "/", null);
-                    cookieManager.DeleteCookiesWithDomainAndPath(".store.steampowered.com", "/", null);
-                    cookieManager.DeleteCookiesWithDomainAndPath("help.steampowered.com", "/", null);
-                    cookieManager.DeleteCookiesWithDomainAndPath("login.steampowered.com", "/", null);
+                    cookieManager.DeleteCookiesWithDomainAndPath("store.steampowered.com", "/", null);   
+                    cookieManager.DeleteCookiesWithDomainAndPath(".store.steampowered.com", "/", null);  
+                    cookieManager.DeleteCookiesWithDomainAndPath("help.steampowered.com", "/", null);    
+                    cookieManager.DeleteCookiesWithDomainAndPath("login.steampowered.com", "/", null);   
                 }
             }
             
@@ -307,10 +359,12 @@ public class SteamLoginForm : Form
             // Initial navigation based on mode
             if (_fetchResultTcs != null && _targetUrl.Contains("dynamicstore/userdata/"))
             {
+                Log("Navigating to store root for dynamicstore fetch...");
                 _webView.Source = new Uri("https://store.steampowered.com/"); 
             }
             else
             {
+                Log($"Navigating to target URL: {_targetUrl}");
                 _webView.Source = new Uri(_targetUrl!); 
             }
 
@@ -318,6 +372,7 @@ public class SteamLoginForm : Form
         }
         catch (Exception ex)
         {
+            Log($"SteamLoginForm_Load failed: {ex.Message}");
             _loginResultTcs?.TrySetException(ex);
             _fetchResultTcs?.TrySetException(ex);
             this.Close();
@@ -326,11 +381,13 @@ public class SteamLoginForm : Form
 
     private async void WebView_NavigationCompleted(object? sender, CoreWebView2NavigationCompletedEventArgs e)
     {
+        Log($"NavigationCompleted. IsSuccess: {e.IsSuccess}, Status: {e.WebErrorStatus}, Source: {_webView.Source}");
+        
         if (!e.IsSuccess)
         {
-            Console.WriteLine($"[Error] WebView2 Navigation Failed to: {_webView!.Source}, Status: {e.WebErrorStatus}");
-            _loginResultTcs?.TrySetException(new Exception($"Navigation failed: {_webView!.Source}")); 
-            _fetchResultTcs?.TrySetException(new Exception($"Navigation failed: {_webView!.Source}")); 
+            Log($"[Error] WebView2 Navigation Failed to: {{_webView!.Source}}, Status: {e.WebErrorStatus}");
+            _loginResultTcs?.TrySetException(new Exception($"Navigation failed: {{_webView!.Source}} (Status: {e.WebErrorStatus})"));   
+            _fetchResultTcs?.TrySetException(new Exception($"Navigation failed: {{_webView!.Source}} (Status: {e.WebErrorStatus})"));   
             this.Close();
             return;
         }
@@ -357,7 +414,7 @@ public class SteamLoginForm : Form
 
         if (_fetchResultTcs != null) // Fetch Mode (after potential two-step navigation)
         {
-            // Give JS time to render and for API calls to settle, and wait for document to be complete
+            // Give JS time to render and for API calls to settle, and wait for document to be complete  
             await Task.Delay(5000); 
             
             // Wait until document is ready
@@ -382,10 +439,10 @@ public class SteamLoginForm : Form
                 }
                 else
                 {
-                    content = await _webView.ExecuteScriptAsync("document.documentElement.outerHTML");
+                    content = await _webView.ExecuteScriptAsync("document.documentElement.outerHTML");   
                 }
                 var unescaped = JsonSerializer.Deserialize<string>(content);
-                _fetchResultTcs.TrySetResult((unescaped ?? string.Empty, _webView.Source.ToString()));
+                _fetchResultTcs.TrySetResult((unescaped ?? string.Empty, _webView.Source.ToString()));   
             }
             catch (Exception ex)
             {
@@ -403,14 +460,14 @@ public class SteamLoginForm : Form
                 // Stage 2.5: Navigate to dynamicstore/userdata to ensure session is fully established for this API
                 if (!_webView.Source.ToString().Contains("/dynamicstore/userdata/"))
                 {
-                    Console.WriteLine($"[Auth Stage 2.5] Navigating to dynamicstore/userdata/ to finalize session.");
+                    Log("[Auth Stage 2.5] Navigating to dynamicstore/userdata/ to finalize session.");
                     await Task.Delay(5000); 
-                    _webView.Source = new Uri("https://store.steampowered.com/dynamicstore/userdata/");
+                    _webView.Source = new Uri("https://store.steampowered.com/dynamicstore/userdata/");  
                     return; 
                 }
 
                 // Stage 3: We are on dynamicstore/userdata/, session should be complete
-                Console.WriteLine($"[Auth Stage 3] Session fully established on dynamicstore/userdata/.");
+                Log("[Auth Stage 3] Session fully established on dynamicstore/userdata/.");
 
                 var communityCookies = await cookieManager.GetCookiesAsync("https://steamcommunity.com");
                 var storeCookies = await cookieManager.GetCookiesAsync("https://store.steampowered.com");
@@ -422,7 +479,7 @@ public class SteamLoginForm : Form
 
                 if (allCookies.Any(c => c.Name == "steamLoginSecure"))
                 {
-                    Console.WriteLine($"[Auth Success] Retrieved steamLoginSecure and synced to Store.");
+                    Log("[Auth Success] Retrieved steamLoginSecure and synced to Store.");
                     
                     var cookieData = allCookies.Select(c => new 
                     { 
@@ -434,7 +491,7 @@ public class SteamLoginForm : Form
                     var authTokensPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LegionDeck", "AuthTokens");
                     Directory.CreateDirectory(authTokensPath);
                     await File.WriteAllTextAsync(Path.Combine(authTokensPath, "steam_cookies.json"), json);
-                    Console.WriteLine($"Steam cookies saved to: {Path.Combine(authTokensPath, "steam_cookies.json")}");
+                    Log($"Steam cookies saved to: {Path.Combine(authTokensPath, "steam_cookies.json")}");
 
                     _loginResultTcs.TrySetResult("SteamLoggedIn");
                     this.Close();
@@ -448,7 +505,19 @@ public class SteamLoginForm : Form
             
             if (loginCookie != null)
             {
-                Console.WriteLine($"[Auth Stage 1] Logged in on Community. Extracting and Saving Cookies.");
+                Log("[Auth Stage 1] Found steamLoginSecure on Community.");
+                
+                // Check if Store also has the cookie
+                var storeCookiesCheck = await cookieManager.GetCookiesAsync("https://store.steampowered.com");
+                if (!storeCookiesCheck.Any(c => c.Name == "steamLoginSecure"))
+                {
+                    Log("[Auth Stage 1.5] Store domain missing steamLoginSecure. Navigating to Store to sync session.");
+                    // Force navigation to Store login check to sync cookies
+                    _webView.Source = new Uri("https://store.steampowered.com/login/checkstoredlogin/?redirectURL=0");
+                    return;
+                }
+
+                Log("[Auth Stage 1] Session valid on both domains. Extracting and Saving Cookies.");
                 
                 // Retrieve all cookies from both domains after successful login on community
                 var communityCookies = await cookieManager.GetCookiesAsync("https://steamcommunity.com");
@@ -469,7 +538,7 @@ public class SteamLoginForm : Form
                 var authTokensPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LegionDeck", "AuthTokens");
                 Directory.CreateDirectory(authTokensPath);
                 await File.WriteAllTextAsync(Path.Combine(authTokensPath, "steam_cookies.json"), json);
-                Console.WriteLine($"Steam cookies saved to: {Path.Combine(authTokensPath, "steam_cookies.json")}");
+                Log($"Steam cookies saved to: {Path.Combine(authTokensPath, "steam_cookies.json")}");
 
                 _loginResultTcs?.TrySetResult("SteamLoggedIn");
                 this.Close();
@@ -477,7 +546,7 @@ public class SteamLoginForm : Form
             }
             else if (_isSilent)
             {
-                 Console.WriteLine("[Silent Refresh] steamLoginSecure not found on Community. Session invalid.");
+                 Log("[Silent Refresh] steamLoginSecure not found on Community. Session invalid.");
                  _loginResultTcs?.TrySetResult("NeedsLogin");
                  this.Close();
                  return;
@@ -489,19 +558,19 @@ public class SteamLoginForm : Form
                  // Stage 2.5: Navigate to dynamicstore/userdata to ensure session is fully established for this API
                 if (!_webView.Source.ToString().Contains("/dynamicstore/userdata/"))
                 {
-                    Console.WriteLine($"[Auth Stage 2.5] Navigating to dynamicstore/userdata/ to finalize session.");
+                    Log("[Auth Stage 2.5] Navigating to dynamicstore/userdata/ to finalize session.");
                     await Task.Delay(5000); 
-                    _webView.Source = new Uri("https://store.steampowered.com/dynamicstore/userdata/");
+                    _webView.Source = new Uri("https://store.steampowered.com/dynamicstore/userdata/");  
                     return; 
                 }
 
                 // Stage 3: We are on dynamicstore/userdata/, session should be complete
-                Console.WriteLine($"[Auth Stage 3] Session fully established on dynamicstore/userdata/.");
+                Log("[Auth Stage 3] Session fully established on dynamicstore/userdata/.");
 
                 var allStoreCookies = await cookieManager.GetCookiesAsync("https://store.steampowered.com");
                 if (allStoreCookies.Any(c => c.Name == "steamLoginSecure"))
                 {
-                    Console.WriteLine($"[Auth Success] Retrieved steamLoginSecure from Store.");
+                    Log("[Auth Success] Retrieved steamLoginSecure from Store.");
                     
                     var cookieData = allStoreCookies.Select(c => new 
                     { 
@@ -513,7 +582,7 @@ public class SteamLoginForm : Form
                     var authTokensPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LegionDeck", "AuthTokens");
                     Directory.CreateDirectory(authTokensPath);
                     await File.WriteAllTextAsync(Path.Combine(authTokensPath, "steam_cookies.json"), json);
-                    Console.WriteLine($"Steam cookies saved to: {Path.Combine(authTokensPath, "steam_cookies.json")}");
+                    Log($"Steam cookies saved to: {Path.Combine(authTokensPath, "steam_cookies.json")}");
 
                     _loginResultTcs?.TrySetResult("SteamLoggedIn");
                     this.Close();

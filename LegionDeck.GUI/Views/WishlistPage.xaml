@@ -7,7 +7,8 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:local="using:LegionDeck.GUI.Views"
     xmlns:models="using:LegionDeck.GUI.Models"
-    mc:Ignorable="d">
+    mc:Ignorable="d"
+    NavigationCacheMode="Required">
 
     <Grid RowDefinitions="Auto,*">
         <CommandBar Grid.Row="0" DefaultLabelPosition="Right">
@@ -26,7 +27,7 @@
                     <Grid Width="180" Height="340" Margin="8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" CornerRadius="8">
                         <StackPanel Padding="0" Spacing="0">
                             <Grid Height="240" Background="{ThemeResource ControlFillColorSecondaryBrush}" CornerRadius="8,8,0,0">
-                                <Image Source="{x:Bind ImgCapsule}" Stretch="UniformToFill" />
+                                <Image Source="{x:Bind ImgCapsule, Mode=OneWay}" Stretch="UniformToFill" />
                             </Grid>
                             <StackPanel Padding="10" Spacing="4">
                                 <TextBlock Text="{x:Bind Name}" FontWeight="Bold" MaxLines="1" TextTrimming="CharacterEllipsis" />
