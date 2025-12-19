@@ -201,19 +201,22 @@ public sealed partial class WishlistPage : Page
                         vm.ImgCapsule = $"https://cdn.cloudflare.steamstatic.com/steam/apps/{item.AppId}/header.jpg";
                     }
 
-                    var plains = await _itadService.GetPlainIdsAsync(item.Name);
-                    if (plains.Any())
+                    if (!string.IsNullOrEmpty(item.Name))
                     {
-                        var subs = await _itadService.IsOnSubscriptionAsync(plains);
-                        var allSubs = subs.Values.SelectMany(x => x).Distinct().ToList();
-                        
-                        vm.IsOnGamePass = allSubs.Any(s => s.Contains("Game Pass"));
-                        vm.IsOnEaPlay = allSubs.Any(s => s.Contains("EA Play"));
-                        vm.IsOnUbisoftPlus = allSubs.Any(s => s.Contains("Ubisoft+"));
+                        var plains = await _itadService.GetPlainIdsAsync(item.Name);
+                        if (plains.Any())
+                        {
+                            var subs = await _itadService.IsOnSubscriptionAsync(plains);
+                            var allSubs = subs.Values.SelectMany(x => x).Distinct().ToList();
+                            
+                            vm.IsOnGamePass = allSubs.Any(s => s.Contains("Game Pass"));
+                            vm.IsOnEaPlay = allSubs.Any(s => s.Contains("EA Play"));
+                            vm.IsOnUbisoftPlus = allSubs.Any(s => s.Contains("Ubisoft+"));
 
-                        vm.UserHasAccess = (vm.IsOnGamePass && hasGP) || 
-                                           (vm.IsOnEaPlay && hasEA) || 
-                                           (vm.IsOnUbisoftPlus && hasUbi);
+                            vm.UserHasAccess = (vm.IsOnGamePass && hasGP) || 
+                                               (vm.IsOnEaPlay && hasEA) || 
+                                               (vm.IsOnUbisoftPlus && hasUbi);
+                        }
                     }
 
                     processedItems.Add(vm);
@@ -259,6 +262,15 @@ public sealed partial class WishlistPage : Page
         {
             if (!retryOnAuthFailure || LoadingRing.IsActive) 
                 LoadingRing.IsActive = false;
+        }
+    }
+
+    private void WishlistGridView_ItemClick(object sender, ItemClickEventArgs e)
+    {
+        if (e.ClickedItem is SteamWishlistItemViewModel vm)
+        {
+            Log($"Wishlist item clicked: {vm.Name}. Navigating to details.");
+            this.Frame.Navigate(typeof(GameDetailsPage), vm);
         }
     }
 }

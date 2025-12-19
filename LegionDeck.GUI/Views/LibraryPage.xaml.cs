@@ -245,7 +245,16 @@ public sealed partial class LibraryPage : Page
     {
         if (e.ClickedItem is LibraryGameViewModel vm)
         {
-            Log($"Game clicked: {vm.Name} (Source: {vm.Source}, ID: {vm.GameData.Id})");
+            Log($"Game clicked: {vm.Name}. Navigating to details.");
+            this.Frame.Navigate(typeof(GameDetailsPage), vm);
+        }
+    }
+
+    private async void PlayButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button btn && btn.DataContext is LibraryGameViewModel vm)
+        {
+            Log($"Play button clicked: {vm.Name} (Source: {vm.Source}, ID: {vm.GameData.Id})");
             await _libraryService.LaunchGameAsync(vm.GameData);
         }
     }

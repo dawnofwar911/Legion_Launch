@@ -179,4 +179,66 @@ public class SteamGridDbService
 
         return null;
     }
+
+    public async Task<string?> GetHeroImageByGameIdAsync(int gameId)
+    {
+        EnsureApiKey();
+        if (string.IsNullOrEmpty(_apiKey)) return null;
+
+        var url = $"{BaseUrl}heroes/game/{gameId}";
+        
+        try
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, url);
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _apiKey);
+            
+            var response = await _httpClient.SendAsync(request);
+            if (!response.IsSuccessStatusCode) return null;
+
+            var json = await response.Content.ReadAsStringAsync();
+            var result = JsonSerializer.Deserialize<SgdbResponse<List<SgdbImage>>>(json);
+
+            if (result?.Success == true && result.Data != null && result.Data.Any())
+            {
+                return result.Data.OrderByDescending(x => x.Score).FirstOrDefault()?.Url;
+            }
+        }
+        catch (Exception ex)
+        {
+            Log($"GetHero Error for ID {gameId}: {ex.Message}");
+        }
+
+        return null;
+    }
+
+    public async Task<string?> GetHeroImageAsync(int steamAppId)
+    {
+        EnsureApiKey();
+        if (string.IsNullOrEmpty(_apiKey)) return null;
+
+        var url = $"{BaseUrl}heroes/steam/{steamAppId}";
+        
+        try
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, url);
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _apiKey);
+            
+            var response = await _httpClient.SendAsync(request);
+            if (!response.IsSuccessStatusCode) return null;
+
+            var json = await response.Content.ReadAsStringAsync();
+            var result = JsonSerializer.Deserialize<SgdbResponse<List<SgdbImage>>>(json);
+
+            if (result?.Success == true && result.Data != null && result.Data.Any())
+            {
+                return result.Data.OrderByDescending(x => x.Score).FirstOrDefault()?.Url;
+            }
+        }
+        catch (Exception ex)
+        {
+            Log($"GetHero Error for SteamAppId {steamAppId}: {ex.Message}");
+        }
+
+        return null;
+    }
 }

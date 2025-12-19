@@ -151,6 +151,8 @@ public class LocalLibraryService
                                     ? $"msgamelaunch://shortcutLaunch/?ProductId={storeId}&Exe={exeId}"
                                     : $"ms-windows-store://pdp/?ProductId={storeId}";
 
+                                if (!IsGameValid(name)) continue;
+
                                 games.Add(new InstalledGame
                                 {
                                     Id = storeId,
@@ -211,6 +213,8 @@ public class LocalLibraryService
 
                                     if (contentId != null && !games.Any(g => g.Id == contentId))
                                     {
+                                        if (!IsGameValid(name)) continue;
+
                                         games.Add(new InstalledGame
                                         {
                                             Id = contentId,
@@ -303,6 +307,8 @@ public class LocalLibraryService
 
                                 if (!games.Any(g => g.Id == subKeyName))
                                 {
+                                    if (!IsGameValid(name)) continue;
+
                                     games.Add(new InstalledGame
                                     {
                                         Id = subKeyName,
@@ -388,6 +394,8 @@ public class LocalLibraryService
 
                 if (name != null && appId != null && appId != "228980") // Filter out redistributables
                 {
+                    if (!IsGameValid(name)) continue;
+
                     games.Add(new InstalledGame
                     {
                         Id = appId,
@@ -422,6 +430,8 @@ public class LocalLibraryService
                         string? appId = root.GetProperty("AppName").GetString();
                         if (name != null && appId != null)
                         {
+                            if (!IsGameValid(name)) continue;
+
                             games.Add(new InstalledGame
                             {
                                 Id = appId,
@@ -437,6 +447,19 @@ public class LocalLibraryService
         }
         catch { }
         return games;
+    }
+
+    private bool IsGameValid(string name)
+    {
+        if (string.IsNullOrEmpty(name)) return false;
+        var lower = name.ToLower();
+        return !lower.Contains("soundtrack") && 
+               !lower.Contains(" ost") && 
+               !lower.Contains("skin") &&
+               !lower.Contains("dlc") &&
+               !lower.Contains("bonus content") &&
+               !lower.Contains("server") &&
+               !lower.Contains("tool");
     }
 
     private void Log(string message)

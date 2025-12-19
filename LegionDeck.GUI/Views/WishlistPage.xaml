@@ -10,6 +10,10 @@
     mc:Ignorable="d"
     NavigationCacheMode="Required">
 
+    <Page.Resources>
+        <models:SourceToColorConverter x:Key="SourceToColorConverter" />
+    </Page.Resources>
+
     <Grid RowDefinitions="Auto,*">
         <CommandBar Grid.Row="0" DefaultLabelPosition="Right">
             <AppBarButton Icon="Refresh" Label="Sync Wishlist" Click="SyncButton_Click" />
@@ -21,6 +25,7 @@
                   Padding="0,0,0,24"
                   SelectionMode="Single"
                   IsItemClickEnabled="True"
+                  ItemClick="WishlistGridView_ItemClick"
                   XYFocusKeyboardNavigation="Enabled">
             <GridView.ItemTemplate>
                 <DataTemplate x:DataType="models:SteamWishlistItemViewModel">
@@ -31,6 +36,15 @@
                             </Grid>
                             <StackPanel Padding="10" Spacing="4">
                                 <TextBlock Text="{x:Bind Name}" FontWeight="Bold" MaxLines="1" TextTrimming="CharacterEllipsis" />
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <Border Background="#FF171A21" HorizontalAlignment="Left" CornerRadius="4" Padding="6,2" VerticalAlignment="Center">
+                                        <TextBlock Text="Steam" FontSize="10" Foreground="White" FontWeight="Bold" />
+                                    </Border>
+                                </Grid>
                                 <TextBlock Text="{x:Bind AccessStatus}" Visibility="{x:Bind AccessVisibility}" Foreground="Green" FontWeight="Bold" FontSize="11" />
                                 <StackPanel Orientation="Horizontal" Spacing="4">
                                     <Border Background="DarkGreen" CornerRadius="4" Padding="4,1" Visibility="{x:Bind GamePassVisibility}">
