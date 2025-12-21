@@ -16,15 +16,18 @@ public sealed partial class LibraryPage : Page
     private readonly LocalLibraryService _libraryService = new();
     private readonly SteamGridDbService _sgdbService;
     private readonly MetadataService _metadataService;
+    private readonly GameEnrichmentService _enrichmentService;
+    private readonly ConfigService _configService;
 
     public LibraryPage()
     {
         this.InitializeComponent();
         this.AllowFocusOnInteraction = true;
         
-        var configService = new ConfigService();
-        _sgdbService = new SteamGridDbService(configService);
+        _configService = new ConfigService();
+        _sgdbService = new SteamGridDbService(_configService);
         _metadataService = new MetadataService();
+        _enrichmentService = new GameEnrichmentService(_configService, _metadataService);
 
         LibraryGridView.ItemsSource = InstalledGames;
         this.Loaded += LibraryPage_Loaded;
@@ -89,8 +92,8 @@ public sealed partial class LibraryPage : Page
             
             ApplyFilter(SearchBox.Text);
             
-            // Start background artwork fetch for non-Steam games (or missing cache)
-            _ = LoadMissingArtworkAsync();
+            // Start background enrichment (Artwork + Descriptions)
+            _ = EnrichLibraryAsync();
             
             Log("RefreshLibraryAsync completed");
         }
@@ -100,49 +103,52 @@ public sealed partial class LibraryPage : Page
         }
     }
 
-    private async Task LoadMissingArtworkAsync()
+    private async Task EnrichLibraryAsync()
     {
-        // Scan all games that don't have a manually cached cover yet
-        var gamesToScan = _allGames.Where(g => !_metadataService.HasCover(g.GameData.Id)).ToList();
+        var gamesToScan = _allGames.ToList(); // Copy to avoid collection modified errors
         using var httpClient = new System.Net.Http.HttpClient();
 
         foreach (var game in gamesToScan)
         {
             try
             {
-                if (game.Source == "Steam")
+                // 1. Basic Cover Art Logic (Legacy but essential for grid)
+                if (!_metadataService.HasCover(game.GameData.Id))
                 {
-                    // For Steam games, first check if the default URL is valid (returns 200 OK)
-                    // The ViewModel sets ImgCapsule to the default Steam URL by default
-                    var defaultUrl = game.ImgCapsule;
-                    bool isValid = await IsUrlValidAsync(httpClient, defaultUrl);
-
-                    if (isValid)
+                    bool coverUpdated = false;
+                    if (game.Source == "Steam")
                     {
-                        // It's valid, so we cache it as the "confirmed" cover so we don't check again
-                        _metadataService.SetCover(game.GameData.Id, defaultUrl);
-                        continue; 
+                        var defaultUrl = game.ImgCapsule;
+                        if (await IsUrlValidAsync(httpClient, defaultUrl))
+                        {
+                            _metadataService.SetCover(game.GameData.Id, defaultUrl);
+                            coverUpdated = true;
+                        }
                     }
-                    else
+
+                    if (!coverUpdated)
                     {
-                        Log($"Default Steam artwork failed for {game.Name} (ID: {game.GameData.Id}). Searching SGDB...");
+                        var gameId = await _sgdbService.SearchGameIdAsync(game.Name);
+                        if (gameId.HasValue)
+                        {
+                            var coverUrl = await _sgdbService.GetVerticalCoverByGameIdAsync(gameId.Value);
+                            if (!string.IsNullOrEmpty(coverUrl))
+                            {
+                                UpdateGameCover(game, coverUrl);
+                            }
+                        }
                     }
                 }
 
-                // If not Steam, or if Steam URL was invalid:
-                var gameId = await _sgdbService.SearchGameIdAsync(game.Name);
-                if (gameId.HasValue)
-                {
-                    var coverUrl = await _sgdbService.GetVerticalCoverByGameIdAsync(gameId.Value);
-                    if (!string.IsNullOrEmpty(coverUrl))
-                    {
-                        UpdateGameCover(game, coverUrl);
-                    }
-                }
+                // 2. Full Enrichment (Hero + Description)
+                await _enrichmentService.EnrichGameAsync(game.GameData.Id, game.Name, game.Source);
+                
+                // Small delay to be polite to APIs
+                await Task.Delay(250);
             }
             catch (Exception ex)
             {
-                Log($"Error fetching artwork for {game.Name}: {ex.Message}");
+                Log($"Error enriching {game.Name}: {ex.Message}");
             }
         }
     }

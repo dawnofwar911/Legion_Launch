@@ -89,7 +89,9 @@ public class SteamAuthService : IAuthService
                 Application.SetCompatibleTextRenderingDefault(false);
 
                 // Use the new silent parameter
-                var form = new SteamLoginForm(tcs, null, silent: true); 
+                var authTokensPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LegionDeck", "AuthTokens");
+                var cookiePath = Path.Combine(authTokensPath, "steam_cookies.json");
+                var form = new SteamLoginForm(tcs, null, silent: true, cookiePath: cookiePath); 
                 Application.Run(form);
                 Log("Silent refresh form closed");
             }
@@ -223,11 +225,11 @@ public class SteamLoginForm : Form
     private WebView2 _webView = new WebView2(); 
 
     // Constructor for Login Mode
-    public SteamLoginForm(TaskCompletionSource<string?> loginTcs, string? initialUrl, bool silent = false)
+    public SteamLoginForm(TaskCompletionSource<string?> loginTcs, string? initialUrl, bool silent = false, string? cookiePath = null)
     {
         _loginResultTcs = loginTcs;
         _targetUrl = initialUrl ?? "https://steamcommunity.com/login/home/?goto=";
-        _cookieJsonPath = null; 
+        _cookieJsonPath = cookiePath; 
         _isSilent = silent;
         InitializeComponentCommon();
         this.Text = "Steam Login - LegionDeck";

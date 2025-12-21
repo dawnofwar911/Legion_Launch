@@ -28,6 +28,8 @@ public sealed partial class WishlistPage : Page
     private readonly UbisoftDataService _ubisoftData = new();
     private readonly HttpClient _httpClient = new();
     private readonly SteamAuthService _steamAuth = new();
+    private readonly MetadataService _metadataService;
+    private readonly GameEnrichmentService _enrichmentService;
     
     private readonly string _cachePath;
 
@@ -36,6 +38,8 @@ public sealed partial class WishlistPage : Page
         this.InitializeComponent();
         _itadService = new ItadApiService(_configService);
         _sgdbService = new SteamGridDbService(_configService);
+        _metadataService = new MetadataService();
+        _enrichmentService = new GameEnrichmentService(_configService, _metadataService);
         
         WishlistGridView.ItemsSource = Wishlist;
 
@@ -52,7 +56,7 @@ public sealed partial class WishlistPage : Page
             var path = System.IO.Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.LocalApplicationData), "LegionDeck", "startup.log");
             System.IO.File.AppendAllText(path, $"{System.DateTime.Now:yyyy-MM-dd HH:mm:ss} - [WishlistPage] {message}\n");
         }
-        catch {{ }}
+        catch { }
     }
 
     private async void WishlistPage_Loaded(object sender, RoutedEventArgs e)
@@ -122,7 +126,7 @@ public sealed partial class WishlistPage : Page
             var response = await _httpClient.SendAsync(request, cts.Token);
             return response.IsSuccessStatusCode;
         }
-        catch {{ return false; }}
+        catch { return false; }
     }
 
     private async void SyncButton_Click(object sender, RoutedEventArgs e)
@@ -222,12 +226,15 @@ public sealed partial class WishlistPage : Page
                     processedItems.Add(vm);
                     DispatcherQueue.TryEnqueue(() => Wishlist.Add(vm));
                 }
-                finally {{ semaphore.Release(); }}
+                finally { semaphore.Release(); }
             });
 
             await Task.WhenAll(tasks);
             await SaveToCache(processedItems.ToList());
             Log("Sync completed successfully");
+            
+            // Start background enrichment
+            _ = EnrichWishlistAsync(processedItems.ToList());
         }
         catch (UnauthorizedAccessException)
         {
@@ -263,6 +270,25 @@ public sealed partial class WishlistPage : Page
             if (!retryOnAuthFailure || LoadingRing.IsActive) 
                 LoadingRing.IsActive = false;
         }
+    }
+
+    private async Task EnrichWishlistAsync(List<SteamWishlistItemViewModel> items)
+    {
+        Log("Starting background enrichment...");
+        foreach (var item in items)
+        {
+            try
+            {
+                // We pass "Steam" as source because wishlist items are by definition from Steam
+                await _enrichmentService.EnrichGameAsync(item.AppId.ToString(), item.Name, "Steam");
+                await Task.Delay(250); // Be polite
+            }
+            catch (Exception ex)
+            {
+                Log($"Enrichment failed for {item.Name}: {ex.Message}");
+            }
+        }
+        Log("Background enrichment completed.");
     }
 
     private void WishlistGridView_ItemClick(object sender, ItemClickEventArgs e)

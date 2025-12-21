@@ -18,6 +18,8 @@ public sealed partial class GameDetailsPage : Page
     private readonly SteamGridDbService _sgdbService;
     private readonly ConfigService _configService;
     private readonly MetadataService _metadataService;
+    private readonly SteamStoreService _steamStoreService;
+    private readonly IgdbService _igdbService;
 
     public GameDetailsPage()
     {
@@ -25,6 +27,8 @@ public sealed partial class GameDetailsPage : Page
         _configService = new ConfigService();
         _sgdbService = new SteamGridDbService(_configService);
         _metadataService = new MetadataService();
+        _steamStoreService = new SteamStoreService();
+        _igdbService = new IgdbService(_configService);
     }
 
     protected override void OnNavigatedTo(NavigationEventArgs e)
@@ -46,13 +50,23 @@ public sealed partial class GameDetailsPage : Page
             }
             else
             {
-                // Fallback to capsule while loading, or just empty if you prefer
                 HeroImage.Source = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage(new Uri(libraryVM.ImgCapsule));
                 _ = LoadHeroImageAsync(libraryVM, libraryVM.GameData.Id);
             }
 
             PlayButton.Visibility = Visibility.Visible;
             GameDescription.Text = $"This game is installed from {libraryVM.Source}.";
+            
+            // Check cache for description
+            var cachedDesc = _metadataService.GetDescription(libraryVM.GameData.Id);
+            if (!string.IsNullOrEmpty(cachedDesc))
+            {
+                GameDescription.Text = cachedDesc;
+            }
+            else
+            {
+                _ = LoadGameDetailsAsync(libraryVM, libraryVM.GameData.Id, libraryVM.Name);
+            }
         }
         else if (_gameViewModel is SteamWishlistItemViewModel wishlistVM)
         {
@@ -81,6 +95,61 @@ public sealed partial class GameDetailsPage : Page
             UbiBadge.Visibility = wishlistVM.UbisoftPlusVisibility;
 
             GameDescription.Text = "This game is on your Steam Wishlist.";
+            
+            // Check cache for description
+            var cachedDesc = _metadataService.GetDescription(wishlistVM.AppId.ToString());
+            if (!string.IsNullOrEmpty(cachedDesc))
+            {
+                 GameDescription.Text = cachedDesc;
+            }
+            else
+            {
+                _ = LoadGameDetailsAsync(wishlistVM, wishlistVM.AppId.ToString(), wishlistVM.Name);
+            }
+        }
+    }
+
+    private async Task LoadGameDetailsAsync(object viewModel, string cacheId, string gameName)
+    {
+        int? appId = null;
+        string? description = null;
+
+        if (viewModel is SteamWishlistItemViewModel wishlistVM)
+        {
+            appId = wishlistVM.AppId;
+        }
+        else if (viewModel is LibraryGameViewModel libraryVM && libraryVM.Source == "Steam")
+        {
+             if (int.TryParse(libraryVM.GameData.Id, out int id))
+             {
+                 appId = id;
+             }
+        }
+
+        // 1. Try Steam Store API first (if it has an AppID)
+        if (appId.HasValue)
+        {
+            var details = await _steamStoreService.GetStoreDetailsAsync(appId.Value);
+            if (details != null && !string.IsNullOrEmpty(details.ShortDescription))
+            {
+                description = details.ShortDescription;
+            }
+        }
+
+        // 2. If no Steam description, try IGDB
+        if (string.IsNullOrEmpty(description))
+        {
+            description = await _igdbService.GetGameDescriptionAsync(gameName);
+        }
+
+        // 3. Update UI and Cache
+        if (!string.IsNullOrEmpty(description))
+        {
+            _metadataService.SetDescription(cacheId, description);
+            DispatcherQueue.TryEnqueue(() => 
+            {
+                GameDescription.Text = description;
+            });
         }
     }
 
