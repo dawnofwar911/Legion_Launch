@@ -14,7 +14,7 @@
         <models:SourceToColorConverter x:Key="SourceToColorConverter" />
     </Page.Resources>
 
-    <Grid RowDefinitions="Auto,*">
+    <Grid RowDefinitions="Auto,*" XYFocusKeyboardNavigation="Enabled">
         <CommandBar Grid.Row="0" DefaultLabelPosition="Right">
             <AppBarButton Icon="Refresh" Label="Sync Wishlist" Click="SyncButton_Click" />
         </CommandBar>
@@ -26,7 +26,16 @@
                   SelectionMode="Single"
                   IsItemClickEnabled="True"
                   ItemClick="WishlistGridView_ItemClick"
-                  XYFocusKeyboardNavigation="Enabled">
+                  XYFocusKeyboardNavigation="Enabled"
+                  XYFocusUpNavigationStrategy="NavigationDirectionDistance"
+                  XYFocusDownNavigationStrategy="NavigationDirectionDistance"
+                  XYFocusLeftNavigationStrategy="NavigationDirectionDistance"
+                  XYFocusRightNavigationStrategy="NavigationDirectionDistance"
+                  IsTabStop="True"
+                  UseSystemFocusVisuals="True"
+                  IsFocusEngagementEnabled="True"
+                  TabFocusNavigation="Cycle"
+                  KeyDown="WishlistGridView_KeyDown">
             <GridView.ItemTemplate>
                 <DataTemplate x:DataType="models:SteamWishlistItemViewModel">
                     <Grid Width="180" Height="340" Margin="8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" CornerRadius="8">

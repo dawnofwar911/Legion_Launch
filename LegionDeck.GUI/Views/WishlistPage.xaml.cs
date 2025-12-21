@@ -299,4 +299,14 @@ public sealed partial class WishlistPage : Page
             this.Frame.Navigate(typeof(GameDetailsPage), vm);
         }
     }
+
+    private void WishlistGridView_KeyDown(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs e)
+    {
+        // Add specific wishlist gamepad logic here if needed (e.g. Y for refresh)
+        if (e.Key == Windows.System.VirtualKey.GamepadY || e.Key == Windows.System.VirtualKey.Y)
+        {
+             _ = SyncWishlistAsync();
+             e.Handled = true;
+        }
+    }
 }

@@ -226,4 +226,17 @@ public sealed partial class GameDetailsPage : Page
             this.Frame.GoBack();
         }
     }
+
+    private void StackPanel_Loaded(object sender, RoutedEventArgs e)
+    {
+        if (PlayButton.Visibility == Visibility.Visible)
+        {
+            PlayButton.Focus(FocusState.Programmatic);
+        }
+        else
+        {
+            // Focus whatever button is available, maybe the last one (Back)
+            // Or just the first focusable child
+        }
+    }
 }

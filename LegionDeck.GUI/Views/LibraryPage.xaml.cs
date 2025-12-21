@@ -41,11 +41,16 @@ public sealed partial class LibraryPage : Page
             // Only refresh if we haven't loaded games yet (NavigationCacheMode handles the rest)
             if (_allGames.Count == 0) await RefreshLibraryAsync();
             
-            await Task.Delay(200);
-            Log("Setting focus to LibraryGridView");
+            // Aggressively set focus for controller
+            await Task.Delay(100);
             LibraryGridView.Focus(FocusState.Programmatic);
-            // Only select if not already selected
-            if (InstalledGames.Any() && LibraryGridView.SelectedIndex < 0) LibraryGridView.SelectedIndex = 0;
+            
+            // Ensure first item is selected if nothing is
+            if (InstalledGames.Any() && LibraryGridView.SelectedIndex < 0) 
+            {
+                LibraryGridView.SelectedIndex = 0;
+            }
+            
             Log("LibraryPage_Loaded completed");
         }
         catch (Exception ex)
@@ -262,6 +267,26 @@ public sealed partial class LibraryPage : Page
         {
             Log($"Play button clicked: {vm.Name} (Source: {vm.Source}, ID: {vm.GameData.Id})");
             await _libraryService.LaunchGameAsync(vm.GameData);
+        }
+    }
+
+    private async void LibraryGridView_PreviewKeyDown(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs e)
+    {
+        if (e.Key == Windows.System.VirtualKey.GamepadX || e.Key == Windows.System.VirtualKey.X)
+        {
+            if (LibraryGridView.SelectedItem is LibraryGameViewModel vm)
+            {
+                Log($"Gamepad X (or Key X) pressed for {vm.Name}. Launching...");
+                await _libraryService.LaunchGameAsync(vm.GameData);
+                e.Handled = true;
+            }
+        }
+        else if (e.Key == Windows.System.VirtualKey.GamepadY || e.Key == Windows.System.VirtualKey.Y)
+        {
+            SearchBox.Focus(FocusState.Programmatic);
+            // Don't handle it, let it bubble or just focus. 
+            // Actually, focusing programmatically is enough.
+            e.Handled = true; 
         }
     }
 }

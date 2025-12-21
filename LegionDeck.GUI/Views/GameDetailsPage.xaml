@@ -9,7 +9,7 @@
 
     <Grid Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
         <ScrollViewer>
-            <StackPanel Spacing="20" Padding="40">
+            <StackPanel Spacing="20" Padding="40" XYFocusKeyboardNavigation="Enabled" Loaded="StackPanel_Loaded">
                 <Grid Height="300" CornerRadius="12" Background="{ThemeResource ControlFillColorSecondaryBrush}">
                     <Image x:Name="HeroImage" Stretch="UniformToFill" HorizontalAlignment="Center" VerticalAlignment="Center" />
                     <Border CornerRadius="12">
@@ -30,14 +30,14 @@
                 </StackPanel>
 
                 <StackPanel Orientation="Horizontal" Spacing="12">
-                    <Button x:Name="PlayButton" Content="Play" Background="#FF27AE60" Foreground="White" Width="150" Height="45" Click="PlayButton_Click" Visibility="Collapsed">
+                    <Button x:Name="PlayButton" Content="Play" Background="#FF27AE60" Foreground="White" Width="150" Height="45" Click="PlayButton_Click" Visibility="Collapsed" UseSystemFocusVisuals="True">
                         <Button.Resources>
                             <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#FF2ECC71" />
                             <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#FF1E8449" />
                         </Button.Resources>
                     </Button>
-                    <Button x:Name="StoreButton" Content="Open in Store" Width="150" Height="45" Click="StoreButton_Click" Visibility="Collapsed" />
-                    <Button Content="Back" Width="150" Height="45" Click="BackButton_Click" />
+                    <Button x:Name="StoreButton" Content="Open in Store" Width="150" Height="45" Click="StoreButton_Click" Visibility="Collapsed" UseSystemFocusVisuals="True" />
+                    <Button Content="Back" Width="150" Height="45" Click="BackButton_Click" UseSystemFocusVisuals="True" />
                 </StackPanel>
 
                 <TextBlock x:Name="GameDescription" FontSize="16" TextWrapping="Wrap" />

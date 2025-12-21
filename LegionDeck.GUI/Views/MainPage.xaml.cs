@@ -22,6 +22,9 @@ public sealed partial class MainPage : Page
             {
                 NavView.SelectedItem = item;
                 ContentFrame.Navigate(typeof(LibraryPage));
+                
+                // Force focus to the NavView so controller has a starting point
+                NavView.Focus(FocusState.Programmatic);
                 break;
             }
         }
@@ -51,6 +54,26 @@ public sealed partial class MainPage : Page
                     ContentFrame.Navigate(typeof(SettingsPage));
                     break;
             }
+        }
+    }
+
+    private void Grid_PreviewKeyDown(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs e)
+    {
+        // Handle B (Mapped to Escape) or Native GamepadB
+        if (e.Key == Windows.System.VirtualKey.GamepadB || e.Key == Windows.System.VirtualKey.Escape)
+        {
+            if (ContentFrame.CanGoBack)
+            {
+                ContentFrame.GoBack();
+                e.Handled = true;
+            }
+        }
+        // Handle Menu (Mapped to M) or Native GamepadMenu
+        else if (e.Key == Windows.System.VirtualKey.GamepadMenu || e.Key == Windows.System.VirtualKey.M)
+        {
+            NavView.IsPaneOpen = !NavView.IsPaneOpen;
+            NavView.Focus(FocusState.Programmatic);
+            e.Handled = true;
         }
     }
 }
