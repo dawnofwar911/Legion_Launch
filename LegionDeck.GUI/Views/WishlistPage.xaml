@@ -35,7 +35,8 @@
                   UseSystemFocusVisuals="True"
                   IsFocusEngagementEnabled="True"
                   TabFocusNavigation="Cycle"
-                  KeyDown="WishlistGridView_KeyDown">
+                  KeyDown="WishlistGridView_KeyDown"
+                  GettingFocus="WishlistGridView_GettingFocus">
             <GridView.ItemTemplate>
                 <DataTemplate x:DataType="models:SteamWishlistItemViewModel">
                     <Grid Width="180" Height="340" Margin="8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" CornerRadius="8">

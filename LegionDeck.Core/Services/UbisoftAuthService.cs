@@ -13,6 +13,13 @@ namespace LegionDeck.Core.Services;
 
 public class UbisoftAuthService : IAuthService
 {
+    private readonly ConfigService? _configService;
+
+    public UbisoftAuthService(ConfigService? configService = null)
+    {
+        _configService = configService;
+    }
+
     public void ClearCookies()
     {
         try

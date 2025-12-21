@@ -43,7 +43,8 @@
                   UseSystemFocusVisuals="True"
                   IsFocusEngagementEnabled="True"
                   TabFocusNavigation="Cycle"
-                  PreviewKeyDown="LibraryGridView_PreviewKeyDown">
+                  PreviewKeyDown="LibraryGridView_PreviewKeyDown"
+                  GettingFocus="LibraryGridView_GettingFocus">
             <GridView.ItemTemplate>
                 <DataTemplate x:DataType="models:LibraryGameViewModel">
                     <Grid Width="180" Height="340" Margin="8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" CornerRadius="8">
@@ -60,26 +61,9 @@
                                 <TextBlock Text="{x:Bind Name}" FontWeight="Bold" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" FontSize="13" />
                                 <TextBlock Text="READY TO PLAY" Foreground="#FF2ECC71" FontWeight="ExtraBold" FontSize="11" Margin="0,0,0,4" />
                                 <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="Auto" />
-                                    </Grid.ColumnDefinitions>
                                     <Border Background="{x:Bind Source, Converter={StaticResource SourceToColorConverter}}" HorizontalAlignment="Left" CornerRadius="4" Padding="6,2" VerticalAlignment="Center">
                                         <TextBlock Text="{x:Bind Source}" FontSize="10" Foreground="White" FontWeight="Bold" />
                                     </Border>
-                                    <Button Grid.Column="1" 
-                                            Content="Play" 
-                                            Click="PlayButton_Click" 
-                                            Background="#FF27AE60"
-                                            Foreground="White"
-                                            Padding="8,4"
-                                            Height="32"
-                                            VerticalAlignment="Center">
-                                        <Button.Resources>
-                                            <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#FF2ECC71" />
-                                            <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#FF1E8449" />
-                                        </Button.Resources>
-                                    </Button>
                                 </Grid>
                             </StackPanel>
                         </StackPanel>

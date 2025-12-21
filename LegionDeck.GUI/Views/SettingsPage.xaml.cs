@@ -16,7 +16,40 @@ public sealed partial class SettingsPage : Page
     public SettingsPage()
     {
         this.InitializeComponent();
+        _configService = new ConfigService();
+        _ubisoftAuth = new UbisoftAuthService(_configService);
         LoadSettings();
+    }
+
+    private void SettingsPage_Loaded(object sender, RoutedEventArgs e)
+    {
+        // Force focus to first input
+        ItadKeyBox.Focus(FocusState.Programmatic);
+    }
+
+    private void Grid_GettingFocus(UIElement sender, Microsoft.UI.Xaml.Input.GettingFocusEventArgs args)
+    {
+        // Redirect focus from the root grid to the first input
+        if (args.NewFocusedElement == sender)
+        {
+            args.TrySetNewFocusedElement(ItadKeyBox);
+            args.Handled = true;
+        }
+    }
+
+    private void Settings_PreviewKeyDown(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs e)
+    {
+        // Handle B (Escape) to go back
+        if (e.Key == Windows.System.VirtualKey.GamepadB || e.Key == Windows.System.VirtualKey.Escape)
+        {
+            if (Frame.CanGoBack)
+            {
+                Frame.GoBack();
+                e.Handled = true;
+            }
+        }
+        // Explicitly let Menu bubble up or handle it if needed
+        // Since MainPage handles it, we don't need to do anything here unless we want to block it.
     }
 
     private void LoadSettings()

@@ -17,7 +17,8 @@
                         Loaded="NavView_Loaded"
                         SelectionChanged="NavView_SelectionChanged"
                         XYFocusKeyboardNavigation="Enabled"
-                        IsTabStop="True">
+                        IsTabStop="True"
+                        UseSystemFocusVisuals="True">
             <NavigationView.MenuItems>
                 <NavigationViewItem Content="Library" Tag="Library" Icon="AllApps" />
                 <NavigationViewItem Content="Wishlist" Tag="Wishlist" Icon="Favorite" />
@@ -28,7 +29,7 @@
                 <NavigationViewItem Content="Settings" Tag="Settings" Icon="Setting" />
             </NavigationView.FooterMenuItems>
 
-            <Frame x:Name="ContentFrame" />
+            <Frame x:Name="ContentFrame" IsTabStop="False" />
         </NavigationView>
     </Grid>
 </Page>

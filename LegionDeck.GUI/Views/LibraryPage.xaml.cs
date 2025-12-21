@@ -33,6 +33,18 @@ public sealed partial class LibraryPage : Page
         this.Loaded += LibraryPage_Loaded;
     }
 
+    protected override async void OnNavigatedTo(Microsoft.UI.Xaml.Navigation.NavigationEventArgs e)
+    {
+        base.OnNavigatedTo(e);
+        
+        if (e.NavigationMode == Microsoft.UI.Xaml.Navigation.NavigationMode.Back)
+        {
+            // Restore focus to grid when coming back
+            await Task.Delay(100);
+            LibraryGridView.Focus(FocusState.Programmatic);
+        }
+    }
+
     private async void LibraryPage_Loaded(object sender, RoutedEventArgs e)
     {
         try
@@ -43,12 +55,13 @@ public sealed partial class LibraryPage : Page
             
             // Aggressively set focus for controller
             await Task.Delay(100);
-            LibraryGridView.Focus(FocusState.Programmatic);
             
-            // Ensure first item is selected if nothing is
-            if (InstalledGames.Any() && LibraryGridView.SelectedIndex < 0) 
+            if (InstalledGames.Any())
             {
-                LibraryGridView.SelectedIndex = 0;
+                if (LibraryGridView.SelectedIndex < 0) LibraryGridView.SelectedIndex = 0;
+                
+                var container = LibraryGridView.ContainerFromIndex(LibraryGridView.SelectedIndex) as Control;
+                container?.Focus(FocusState.Programmatic);
             }
             
             Log("LibraryPage_Loaded completed");
@@ -261,12 +274,20 @@ public sealed partial class LibraryPage : Page
         }
     }
 
-    private async void PlayButton_Click(object sender, RoutedEventArgs e)
+    private void LibraryGridView_GettingFocus(UIElement sender, Microsoft.UI.Xaml.Input.GettingFocusEventArgs args)
     {
-        if (sender is Button btn && btn.DataContext is LibraryGameViewModel vm)
+        // If the focus is moving TO the GridView itself (not an item inside it)
+        // We redirect it to the selected item or first item.
+        if (args.NewFocusedElement == LibraryGridView && LibraryGridView.Items.Count > 0)
         {
-            Log($"Play button clicked: {vm.Name} (Source: {vm.Source}, ID: {vm.GameData.Id})");
-            await _libraryService.LaunchGameAsync(vm.GameData);
+            if (LibraryGridView.SelectedIndex < 0) LibraryGridView.SelectedIndex = 0;
+            
+            var container = LibraryGridView.ContainerFromIndex(LibraryGridView.SelectedIndex) as Control;
+            if (container != null)
+            {
+                args.TrySetNewFocusedElement(container);
+                args.Handled = true;
+            }
         }
     }
 

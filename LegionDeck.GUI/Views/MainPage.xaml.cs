@@ -11,6 +11,33 @@ public sealed partial class MainPage : Page
     public MainPage()
     {
         this.InitializeComponent();
+        ContentFrame.Navigated += ContentFrame_Navigated;
+    }
+
+    private void ContentFrame_Navigated(object sender, NavigationEventArgs e)
+    {
+        // Sync NavView selection with current page
+        var pageType = e.SourcePageType;
+        string? tag = null;
+
+        if (pageType == typeof(LibraryPage)) tag = "Library";
+        else if (pageType == typeof(WishlistPage)) tag = "Wishlist";
+        else if (pageType == typeof(SubscriptionsPage)) tag = "Subscriptions";
+        else if (pageType == typeof(SettingsPage)) tag = "Settings";
+
+        if (tag != null)
+        {
+            var item = NavView.MenuItems.OfType<NavigationViewItem>().FirstOrDefault(i => i.Tag?.ToString() == tag);
+            if (item == null)
+            {
+                item = NavView.FooterMenuItems.OfType<NavigationViewItem>().FirstOrDefault(i => i.Tag?.ToString() == tag);
+            }
+
+            if (item != null)
+            {
+                NavView.SelectedItem = item;
+            }
+        }
     }
 
     private void NavView_Loaded(object sender, RoutedEventArgs e)
@@ -67,12 +94,61 @@ public sealed partial class MainPage : Page
                 ContentFrame.GoBack();
                 e.Handled = true;
             }
+            else
+            {
+                // If at root of page, focus NavView
+                NavView.IsPaneOpen = true;
+                NavView.Focus(FocusState.Programmatic);
+                e.Handled = true;
+            }
         }
         // Handle Menu (Mapped to M) or Native GamepadMenu
         else if (e.Key == Windows.System.VirtualKey.GamepadMenu || e.Key == Windows.System.VirtualKey.M)
         {
-            NavView.IsPaneOpen = !NavView.IsPaneOpen;
-            NavView.Focus(FocusState.Programmatic);
+            NavView.IsPaneOpen = true;
+            
+            // Wait for pane to open then focus
+            var timer = DispatcherQueue.CreateTimer();
+            timer.Interval = TimeSpan.FromMilliseconds(100);
+            timer.Tick += (s, args) =>
+            {
+                timer.Stop();
+                bool focused = false;
+
+                // Try to focus selected item container
+                if (NavView.SelectedItem != null)
+                {
+                    var container = NavView.ContainerFromMenuItem(NavView.SelectedItem) as Control;
+                    focused = container?.Focus(FocusState.Programmatic) ?? false;
+                }
+
+                // Fallback: Focus Settings item container (Priority over First Item if selected was null/failed but meant to be Settings)
+                if (!focused)
+                {
+                     var settingsItem = NavView.FooterMenuItems.OfType<NavigationViewItem>().FirstOrDefault(i => i.Tag?.ToString() == "Settings");
+                     if (settingsItem != null && NavView.SelectedItem == settingsItem)
+                     {
+                         var container = NavView.ContainerFromMenuItem(settingsItem) as Control;
+                         focused = container?.Focus(FocusState.Programmatic) ?? false;
+                     }
+                }
+
+                // Fallback: Focus first menu item container
+                if (!focused && NavView.MenuItems.Count > 0)
+                {
+                    var firstItem = NavView.MenuItems[0];
+                    var container = NavView.ContainerFromMenuItem(firstItem) as Control;
+                    focused = container?.Focus(FocusState.Programmatic) ?? false;
+                }
+
+                // Final Fallback: Focus NavView itself (better than nothing)
+                if (!focused)
+                {
+                    NavView.Focus(FocusState.Programmatic);
+                }
+            };
+            timer.Start();
+            
             e.Handled = true;
         }
     }

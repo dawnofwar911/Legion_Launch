@@ -59,18 +59,45 @@ public sealed partial class WishlistPage : Page
         catch { }
     }
 
+    protected override async void OnNavigatedTo(Microsoft.UI.Xaml.Navigation.NavigationEventArgs e)
+    {
+        base.OnNavigatedTo(e);
+        
+        if (e.NavigationMode == Microsoft.UI.Xaml.Navigation.NavigationMode.Back)
+        {
+            // Restore focus to grid when coming back
+            await Task.Delay(100);
+            WishlistGridView.Focus(FocusState.Programmatic);
+        }
+    }
+
     private async void WishlistPage_Loaded(object sender, RoutedEventArgs e)
     {
-        Log("WishlistPage_Loaded started");
-        if (Wishlist.Count == 0)
+        try
         {
+            Log("WishlistPage_Loaded started");
             await LoadFromCache();
+            
+            if (Wishlist.Count == 0)
+            {
+                Log("Cache empty or not found.");
+                _ = SyncWishlistAsync();
+            }
+            
+            // Focus item container
+            if (Wishlist.Any())
+            {
+                if (WishlistGridView.SelectedIndex < 0) WishlistGridView.SelectedIndex = 0;
+                
+                await Task.Delay(100);
+                var container = WishlistGridView.ContainerFromIndex(WishlistGridView.SelectedIndex) as Control;
+                container?.Focus(FocusState.Programmatic);
+            }
         }
-        
-        // Give focus to the grid for controller navigation
-        await Task.Delay(100);
-        WishlistGridView.Focus(FocusState.Programmatic);
-        if (Wishlist.Any()) WishlistGridView.SelectedIndex = 0;
+        catch (Exception ex)
+        {
+            Log($"Error loading wishlist: {ex.Message}");
+        }
     }
 
     private async Task LoadFromCache()
@@ -297,6 +324,23 @@ public sealed partial class WishlistPage : Page
         {
             Log($"Wishlist item clicked: {vm.Name}. Navigating to details.");
             this.Frame.Navigate(typeof(GameDetailsPage), vm);
+        }
+    }
+
+    private void WishlistGridView_GettingFocus(UIElement sender, Microsoft.UI.Xaml.Input.GettingFocusEventArgs args)
+    {
+        // If the focus is moving TO the GridView itself (not an item inside it)
+        // We redirect it to the selected item or first item.
+        if (args.NewFocusedElement == WishlistGridView && WishlistGridView.Items.Count > 0)
+        {
+            if (WishlistGridView.SelectedIndex < 0) WishlistGridView.SelectedIndex = 0;
+            
+            var container = WishlistGridView.ContainerFromIndex(WishlistGridView.SelectedIndex) as Control;
+            if (container != null)
+            {
+                args.TrySetNewFocusedElement(container);
+                args.Handled = true;
+            }
         }
     }
 

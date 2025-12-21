@@ -12,6 +12,7 @@ public class GamepadService
     private DispatcherQueueTimer _timer;
     private Gamepad _activeGamepad;
     private Dictionary<GamepadButtons, bool> _previousState = new();
+    private Dictionary<string, bool> _stickState = new();
     private readonly DispatcherQueue _dispatcherQueue;
     
     // Virtual Keys
@@ -20,14 +21,9 @@ public class GamepadService
     private const ushort VK_LEFT = 0x25;
     private const ushort VK_RIGHT = 0x27;
     private const ushort VK_RETURN = 0x0D; // Enter
-    private const ushort VK_BACK = 0x08;   // Backspace (or use custom handling for B)
+    private const ushort VK_BACK = 0x08;   // Backspace
     private const ushort VK_TAB = 0x09;
-    
-    // We can also map B to Escape or a custom key if Backspace isn't what we want.
-    // But PreviewKeyDown in MainPage handles GamepadB separately.
-    // If we simulate Keyboard input, WinUI might not see it as Gamepad input.
-    // So we should simulate ARROWS for D-Pad, but maybe let A/B be handled by the app if it sees them?
-    // If the app sees NOTHING, we map everything.
+    private const double STICK_DEADZONE = 0.5;
 
     public GamepadService()
     {
@@ -56,7 +52,7 @@ public class GamepadService
             var path = System.IO.Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.LocalApplicationData), "LegionDeck", "startup.log");
             System.IO.File.AppendAllText(path, $"{System.DateTime.Now:yyyy-MM-dd HH:mm:ss} - [GamepadService] {message}\n");
         }
-        catch { }
+        catch {{ }}
     }
 
     private void Gamepad_GamepadAdded(object sender, Gamepad e)
@@ -114,11 +110,16 @@ public class GamepadService
             var reading = _activeGamepad.GetCurrentReading();
             var buttons = reading.Buttons;
 
+            // D-Pad
             CheckButton(buttons, GamepadButtons.DPadUp, VK_UP, "DPadUp");
             CheckButton(buttons, GamepadButtons.DPadDown, VK_DOWN, "DPadDown");
             CheckButton(buttons, GamepadButtons.DPadLeft, VK_LEFT, "DPadLeft");
             CheckButton(buttons, GamepadButtons.DPadRight, VK_RIGHT, "DPadRight");
             
+            // Thumbstick Emulation
+            CheckStick(reading.LeftThumbstickX, reading.LeftThumbstickY);
+
+            // Buttons
             CheckButton(buttons, GamepadButtons.A, VK_RETURN, "A");
             CheckButton(buttons, GamepadButtons.B, 0x1B, "B"); // Escape
             CheckButton(buttons, GamepadButtons.X, 0x58, "X");
@@ -129,6 +130,39 @@ public class GamepadService
         {
              Log($"Error in Timer_Tick: {ex.Message}");
         }
+    }
+
+    private void CheckStick(double x, double y)
+    {
+        // Up
+        bool isUp = y > STICK_DEADZONE;
+        UpdateStickState("StickUp", isUp, VK_UP);
+
+        // Down
+        bool isDown = y < -STICK_DEADZONE;
+        UpdateStickState("StickDown", isDown, VK_DOWN);
+
+        // Left
+        bool isLeft = x < -STICK_DEADZONE;
+        UpdateStickState("StickLeft", isLeft, VK_LEFT);
+
+        // Right
+        bool isRight = x > STICK_DEADZONE;
+        UpdateStickState("StickRight", isRight, VK_RIGHT);
+    }
+
+    private void UpdateStickState(string key, bool isPressed, ushort vk)
+    {
+        bool wasPressed = _stickState.TryGetValue(key, out var state) && state;
+        
+        if (isPressed && !wasPressed)
+        {
+            // Entering active zone -> Press Key
+            Log($"Stick {key} Active. Sending Key: {vk}");
+            NativeMethods.SendKey(vk);
+        }
+        
+        _stickState[key] = isPressed;
     }
 
     private void CheckButton(GamepadButtons currentButtons, GamepadButtons targetButton, ushort vk, string name)
