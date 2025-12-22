@@ -5,14 +5,95 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-    mc:Ignorable="d">
+    xmlns:models="using:LegionDeck.GUI.Models"
+    mc:Ignorable="d"
+    NavigationCacheMode="Enabled">
 
-    <StackPanel Padding="24" Spacing="12">
-        <TextBlock Text="Subscriptions" Style="{ThemeResource TitleTextBlockStyle}" />
-        <TextBlock Text="Check your active game subscriptions." Style="{ThemeResource BodyTextBlockStyle}" />
-        
-        <InfoBar IsOpen="True" Severity="Informational" Title="Xbox Game Pass" Message="Checking status..." x:Name="XboxInfo" />
-        <InfoBar IsOpen="True" Severity="Informational" Title="EA Play" Message="Checking status..." x:Name="EaInfo" />
-        <InfoBar IsOpen="True" Severity="Informational" Title="Ubisoft+" Message="Checking status..." x:Name="UbiInfo" />
-    </StackPanel>
+    <Page.Resources>
+        <models:SourceToColorConverter x:Key="SourceToColorConverter" />
+    </Page.Resources>
+
+    <Grid Padding="24" RowDefinitions="Auto,Auto,*" XYFocusKeyboardNavigation="Enabled" IsTabStop="True">
+        <TextBlock Text="Subscriptions" Style="{ThemeResource TitleTextBlockStyle}" Grid.Row="0" Margin="0,0,0,20" />
+
+        <!-- Service Status Cards -->
+        <Grid Grid.Row="1" ColumnDefinitions="*,*,*" ColumnSpacing="12" Margin="0,0,0,24">
+            <!-- Xbox Card -->
+            <Border Grid.Column="0" Background="#107C10" CornerRadius="8" Padding="16" Height="100">
+                <StackPanel VerticalAlignment="Center">
+                    <TextBlock Text="Xbox Game Pass" Foreground="White" FontWeight="Bold" FontSize="18" />
+                    <TextBlock x:Name="XboxStatusText" Text="Checking..." Foreground="White" Opacity="0.8" Margin="0,4,0,0" />
+                </StackPanel>
+            </Border>
+
+            <!-- EA Card -->
+            <Border Grid.Column="1" Background="#FF4747" CornerRadius="8" Padding="16" Height="100">
+                <StackPanel VerticalAlignment="Center">
+                    <TextBlock Text="EA Play" Foreground="White" FontWeight="Bold" FontSize="18" />
+                    <TextBlock x:Name="EaStatusText" Text="Checking..." Foreground="White" Opacity="0.8" Margin="0,4,0,0" />
+                </StackPanel>
+            </Border>
+
+            <!-- Ubisoft Card -->
+            <Border Grid.Column="2" Background="#0099FF" CornerRadius="8" Padding="16" Height="100">
+                <StackPanel VerticalAlignment="Center">
+                    <TextBlock Text="Ubisoft+" Foreground="White" FontWeight="Bold" FontSize="18" />
+                    <TextBlock x:Name="UbiStatusText" Text="Checking..." Foreground="White" Opacity="0.8" Margin="0,4,0,0" />
+                </StackPanel>
+            </Border>
+        </Grid>
+
+        <!-- Wishlist Matches -->
+        <Grid Grid.Row="2">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+            
+            <TextBlock Text="Play for Free (On Wishlist)" Style="{ThemeResource SubtitleTextBlockStyle}" Margin="0,0,0,12" />
+            
+            <GridView Grid.Row="1"
+                      x:Name="MatchesGridView"
+                      SelectionMode="Single"
+                      IsItemClickEnabled="True"
+                      XYFocusKeyboardNavigation="Enabled"
+                      XYFocusUpNavigationStrategy="NavigationDirectionDistance"
+                      IsTabStop="True"
+                      UseSystemFocusVisuals="True"
+                      IsFocusEngagementEnabled="True"
+                      TabFocusNavigation="Cycle">
+                <GridView.ItemTemplate>
+                    <DataTemplate x:DataType="models:SteamWishlistItemViewModel">
+                        <Grid Width="160" Height="280" Margin="6" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" CornerRadius="8">
+                            <StackPanel Padding="0" Spacing="0">
+                                <Grid Height="200" Background="{ThemeResource ControlFillColorSecondaryBrush}" CornerRadius="8,8,0,0">
+                                    <Image Source="{x:Bind ImgCapsule, Mode=OneWay}" Stretch="UniformToFill" />
+                                </Grid>
+                                <StackPanel Padding="10" Spacing="4">
+                                    <TextBlock Text="{x:Bind Name}" FontWeight="Bold" MaxLines="1" TextTrimming="CharacterEllipsis" FontSize="12" />
+                                    <StackPanel Orientation="Horizontal" Spacing="4">
+                                        <Border Background="DarkGreen" CornerRadius="4" Padding="4,1" Visibility="{x:Bind GamePassVisibility}">
+                                            <TextBlock Text="GP" FontSize="9" Foreground="White" />
+                                        </Border>
+                                        <Border Background="Red" CornerRadius="4" Padding="4,1" Visibility="{x:Bind EaPlayVisibility}">
+                                            <TextBlock Text="EA" FontSize="9" Foreground="White" />
+                                        </Border>
+                                        <Border Background="Blue" CornerRadius="4" Padding="4,1" Visibility="{x:Bind UbisoftPlusVisibility}">
+                                            <TextBlock Text="U+" FontSize="9" Foreground="White" />
+                                        </Border>
+                                    </StackPanel>
+                                </StackPanel>
+                            </StackPanel>
+                        </Grid>
+                    </DataTemplate>
+                </GridView.ItemTemplate>
+            </GridView>
+            
+            <TextBlock x:Name="NoMatchesText" Grid.Row="1" Text="No wishlist items found on your active subscriptions." 
+                       HorizontalAlignment="Center" VerticalAlignment="Center" 
+                       Opacity="0.5" Visibility="Collapsed" />
+            
+            <ProgressRing x:Name="LoadingRing" Grid.Row="1" IsActive="False" Width="50" Height="50" />
+        </Grid>
+    </Grid>
 </Page>
