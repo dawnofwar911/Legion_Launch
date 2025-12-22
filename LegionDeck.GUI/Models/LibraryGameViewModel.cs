@@ -7,7 +7,21 @@ namespace LegionDeck.GUI.Models;
 public class LibraryGameViewModel : INotifyPropertyChanged
 {
     public LocalLibraryService.InstalledGame GameData { get; }
-    public string Name => GameData.Name;
+    
+    private string _name;
+    public string Name 
+    { 
+        get => _name;
+        set
+        {
+            if (_name != value)
+            {
+                _name = value;
+                OnPropertyChanged();
+            }
+        }
+    }
+
     public string Source => GameData.Source;
     
     private string _imgCapsule;
@@ -29,6 +43,7 @@ public class LibraryGameViewModel : INotifyPropertyChanged
     public LibraryGameViewModel(LocalLibraryService.InstalledGame game)
     {
         GameData = game;
+        _name = game.Name;
         if (game.Source == "Steam")
             _imgCapsule = $"https://cdn.cloudflare.steamstatic.com/steam/apps/{game.Id}/library_600x900_2x.jpg";
         else

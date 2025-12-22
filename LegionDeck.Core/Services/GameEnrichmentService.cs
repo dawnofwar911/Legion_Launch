@@ -21,7 +21,28 @@ public class GameEnrichmentService
 
     public async Task EnrichGameAsync(string gameId, string gameName, string source)
     {
-        // 1. Enrich Hero Image
+        // 1. Enrich Name (especially for Steam Library where we only have ID)
+        if (!_metadataService.HasName(gameId) || gameName.StartsWith("AppID "))
+        {
+            string? realName = null;
+            if (source == "Steam" && int.TryParse(gameId, out int appId))
+            {
+                var details = await _steamStoreService.GetStoreDetailsAsync(appId);
+                if (details != null && !string.IsNullOrEmpty(details.Name))
+                {
+                    realName = details.Name;
+                }
+            }
+
+            if (!string.IsNullOrEmpty(realName))
+            {
+                _metadataService.SetName(gameId, realName);
+                gameName = realName; // Update local variable for next steps
+                Debug.WriteLine($"[Enrichment] Found name for {gameId}: {realName}");
+            }
+        }
+
+        // 2. Enrich Hero Image
         if (!_metadataService.HasHero(gameId))
         {
             string? heroUrl = null;

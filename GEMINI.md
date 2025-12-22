@@ -96,8 +96,8 @@ Epic: com.epicgames.launcher://
 - Troubleshooting: If the app crashes on launch, check `%LOCALAPPDATA%\LegionDeck\startup.log`.
 
 7. Current Context / Active Task
-Status: Phase 2 Development.
-Next Action: Implement Controller Navigation (XInput) and Visual Polish for the Handheld UI.
+Status: Phase 2 Complete / Phase 3 Planning.
+Next Action: Implement Sorting/Filtering logic and investigate "Available Games" fetching.
 
 Roadmap Progress:
 [x] Phase 1: The Brain (CLI) - COMPLETE
@@ -107,7 +107,15 @@ Roadmap Progress:
 [x] Step 4: The Oracle (Moved to Core)
 [x] Step 5: Output (CLI functional and verified)
 
-[ ] Phase 2: The Face (GUI) - IN PROGRESS
+[x] Phase 2: The Face (GUI) - COMPLETE
 [x] Step 1: Port logic to WinUI 3 (Self-contained, Shared Core).
-[ ] Step 2: Design "Grid View" with Controller Navigation (XInput).
-[ ] Step 3: Implement "Badges" (Green for Game Pass, Red for EA).
+[x] Step 2: Design "Grid View" with Controller Navigation (XInput/Keyboard emulation).
+[x] Step 3: Implement "Badges" (Green for Game Pass, Red for EA).
+[x] Step 4: Subscriptions Dashboard (Visual cards + Wishlist Matches).
+[x] Step 5: Settings & Navigation Polish (Focus management, GamepadService).
+
+[ ] Phase 3: The Library (Management & Polish) - IN PROGRESS
+[ ] Step 1: Sorting & Filtering (Sort by Name, Source, Date Added).
+[ ] Step 2: "Available Games" (Fetch full library vs Installed).
+[ ] Step 3: Installation Management (Trigger installs via URI).
+[ ] Step 4: UI Transitions & Animation Polish.

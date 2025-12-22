@@ -11,17 +11,20 @@ public class MetadataService
     private readonly string _coverCachePath;
     private readonly string _heroCachePath;
     private readonly string _descriptionCachePath;
+    private readonly string _nameCachePath;
     private Dictionary<string, string> _coverCache = new(StringComparer.OrdinalIgnoreCase);
     private Dictionary<string, string> _heroCache = new(StringComparer.OrdinalIgnoreCase);
     private Dictionary<string, string> _descriptionCache = new(StringComparer.OrdinalIgnoreCase);
+    private Dictionary<string, string> _nameCache = new(StringComparer.OrdinalIgnoreCase);
 
     public MetadataService()
     {
-        var folder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LegionDeck", "Data");
+        var folder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LegionDeck", "Metadata");
         Directory.CreateDirectory(folder);
         _coverCachePath = Path.Combine(folder, "cover_cache.json");
         _heroCachePath = Path.Combine(folder, "hero_cache.json");
         _descriptionCachePath = Path.Combine(folder, "description_cache.json");
+        _nameCachePath = Path.Combine(folder, "name_cache.json");
         LoadCaches();
     }
 
@@ -59,6 +62,17 @@ public class MetadataService
             }
             catch { }
         }
+
+        if (File.Exists(_nameCachePath))
+        {
+            try
+            {
+                var json = File.ReadAllText(_nameCachePath);
+                var data = JsonSerializer.Deserialize<Dictionary<string, string>>(json);
+                if (data != null) _nameCache = data;
+            }
+            catch { }
+        }
     }
 
     public void SaveCoverCache()
@@ -87,6 +101,16 @@ public class MetadataService
         {
             var json = JsonSerializer.Serialize(_descriptionCache, new JsonSerializerOptions { WriteIndented = true });
             File.WriteAllText(_descriptionCachePath, json);
+        }
+        catch { }
+    }
+
+    public void SaveNameCache()
+    {
+        try
+        {
+            var json = JsonSerializer.Serialize(_nameCache, new JsonSerializerOptions { WriteIndented = true });
+            File.WriteAllText(_nameCachePath, json);
         }
         catch { }
     }
@@ -140,5 +164,22 @@ public class MetadataService
     public bool HasDescription(string gameId)
     {
         return _descriptionCache.ContainsKey(gameId);
+    }
+
+    public string? GetName(string gameId)
+    {
+        _nameCache.TryGetValue(gameId, out var name);
+        return name;
+    }
+
+    public void SetName(string gameId, string name)
+    {
+        _nameCache[gameId] = name;
+        SaveNameCache();
+    }
+
+    public bool HasName(string gameId)
+    {
+        return _nameCache.ContainsKey(gameId);
     }
 }

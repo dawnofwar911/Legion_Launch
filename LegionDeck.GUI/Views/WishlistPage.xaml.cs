@@ -161,6 +161,21 @@ public sealed partial class WishlistPage : Page
         await SyncWishlistAsync();
     }
 
+    private void SortByName_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is MenuFlyoutItem item)
+        {
+            var list = Wishlist.ToList();
+            if (item.Tag?.ToString() == "NameAsc")
+                list = list.OrderBy(g => g.Name).ToList();
+            else
+                list = list.OrderByDescending(g => g.Name).ToList();
+
+            Wishlist.Clear();
+            foreach (var g in list) Wishlist.Add(g);
+        }
+    }
+
     private async Task SyncWishlistAsync(bool retryOnAuthFailure = true)
     {
         Log("SyncWishlistAsync started");

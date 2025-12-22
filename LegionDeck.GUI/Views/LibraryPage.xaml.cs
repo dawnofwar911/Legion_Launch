@@ -18,6 +18,7 @@ public sealed partial class LibraryPage : Page
     private readonly MetadataService _metadataService;
     private readonly GameEnrichmentService _enrichmentService;
     private readonly ConfigService _configService;
+    private readonly SteamLibraryService _steamLibraryService = new();
 
     public LibraryPage()
     {
@@ -31,6 +32,11 @@ public sealed partial class LibraryPage : Page
 
         LibraryGridView.ItemsSource = InstalledGames;
         this.Loaded += LibraryPage_Loaded;
+    }
+
+    private async void ViewMode_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        await RefreshLibraryAsync();
     }
 
     protected override async void OnNavigatedTo(Microsoft.UI.Xaml.Navigation.NavigationEventArgs e)
@@ -51,6 +57,7 @@ public sealed partial class LibraryPage : Page
         {
             Log("LibraryPage_Loaded started");
             // Only refresh if we haven't loaded games yet (NavigationCacheMode handles the rest)
+            // But check if view mode changed
             if (_allGames.Count == 0) await RefreshLibraryAsync();
             
             // Aggressively set focus for controller
@@ -85,27 +92,81 @@ public sealed partial class LibraryPage : Page
 
     private async void RefreshButton_Click(object sender, RoutedEventArgs e) => await RefreshLibraryAsync();
 
+    private void SortByName_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is MenuFlyoutItem item)
+        {
+            if (item.Tag?.ToString() == "NameAsc")
+                _allGames = _allGames.OrderBy(g => g.Name).ToList();
+            else
+                _allGames = _allGames.OrderByDescending(g => g.Name).ToList();
+            
+            ApplyFilter(SearchBox.Text);
+        }
+    }
+
+    private void SortBySource_Click(object sender, RoutedEventArgs e)
+    {
+        _allGames = _allGames.OrderBy(g => g.Source).ThenBy(g => g.Name).ToList();
+        ApplyFilter(SearchBox.Text);
+    }
+
     private async Task RefreshLibraryAsync()
     {
         try
         {
             Log("RefreshLibraryAsync started");
             _allGames.Clear();
-            var games = await _libraryService.GetInstalledGamesAsync();
-            Log($"Found {games.Count} games");
             
-            foreach (var game in games)
+            string mode = (ViewModeCombo.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "Installed";
+
+            if (mode == "Installed")
             {
-                var vm = new LibraryGameViewModel(game);
+                var games = await _libraryService.GetInstalledGamesAsync();
+                Log($"Found {games.Count} installed games");
                 
-                // Check local cache for custom cover
-                var cachedCover = _metadataService.GetCover(game.Id);
-                if (!string.IsNullOrEmpty(cachedCover))
+                foreach (var game in games)
                 {
-                    vm.ImgCapsule = cachedCover;
+                    var vm = new LibraryGameViewModel(game);
+                    
+                    var cachedName = _metadataService.GetName(game.Id);
+                    if (!string.IsNullOrEmpty(cachedName)) vm.Name = cachedName;
+
+                    var cachedCover = _metadataService.GetCover(game.Id);
+                    if (!string.IsNullOrEmpty(cachedCover)) vm.ImgCapsule = cachedCover;
+                    _allGames.Add(vm);
                 }
+            }
+            else if (mode == "Steam")
+            {
+                var items = await _steamLibraryService.GetOwnedGamesAsync();
+                Log($"Found {items.Count} Steam owned games");
                 
-                _allGames.Add(vm);
+                foreach (var item in items)
+                {
+                    // Create a dummy InstalledGame for the VM
+                    var gameData = new LocalLibraryService.InstalledGame
+                    {
+                        Id = item.AppId.ToString(),
+                        Name = item.Name, // Initially "AppID 12345"
+                        Source = "Steam",
+                        InstallPath = "",
+                        LaunchUri = "" // steam://run/id prompts install if not installed
+                    };
+                    
+                    var vm = new LibraryGameViewModel(gameData);
+
+                    var cachedName = _metadataService.GetName(gameData.Id);
+                    if (!string.IsNullOrEmpty(cachedName)) vm.Name = cachedName;
+
+                    // Pre-fill capsule if standard format
+                    vm.ImgCapsule = $"https://cdn.cloudflare.steamstatic.com/steam/apps/{item.AppId}/library_600x900_2x.jpg";
+                    
+                    var cachedCover = _metadataService.GetCover(item.AppId.ToString());
+                    if (!string.IsNullOrEmpty(cachedCover)) vm.ImgCapsule = cachedCover;
+
+                    _allGames.Add(vm);
+                }
             }
             
             ApplyFilter(SearchBox.Text);
@@ -158,9 +219,16 @@ public sealed partial class LibraryPage : Page
                     }
                 }
 
-                // 2. Full Enrichment (Hero + Description)
+                // 2. Full Enrichment (Name + Hero + Description)
                 await _enrichmentService.EnrichGameAsync(game.GameData.Id, game.Name, game.Source);
                 
+                // If name was updated in cache, update VM
+                var realName = _metadataService.GetName(game.GameData.Id);
+                if (!string.IsNullOrEmpty(realName) && game.Name != realName)
+                {
+                    UpdateGameName(game, realName);
+                }
+
                 // Small delay to be polite to APIs
                 await Task.Delay(250);
             }
@@ -169,6 +237,14 @@ public sealed partial class LibraryPage : Page
                 Log($"Error enriching {game.Name}: {ex.Message}");
             }
         }
+    }
+
+    private void UpdateGameName(LibraryGameViewModel game, string name)
+    {
+        this.DispatcherQueue.TryEnqueue(() => 
+        {
+            game.Name = name;
+        });
     }
 
     private async Task<bool> IsUrlValidAsync(System.Net.Http.HttpClient client, string url)

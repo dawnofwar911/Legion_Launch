@@ -15,6 +15,23 @@
     <Grid RowDefinitions="Auto,*" XYFocusKeyboardNavigation="Enabled">
         <CommandBar Grid.Row="0" DefaultLabelPosition="Right">
             <AppBarButton Icon="Refresh" Label="Scan Library" Click="RefreshButton_Click" />
+            <AppBarSeparator />
+            <AppBarElementContainer>
+                <ComboBox x:Name="ViewModeCombo" SelectionChanged="ViewMode_SelectionChanged" Width="150" VerticalAlignment="Center" Margin="0,0,8,0">
+                    <ComboBoxItem Content="Installed" Tag="Installed" IsSelected="True" />
+                    <ComboBoxItem Content="Steam Library" Tag="Steam" />
+                </ComboBox>
+            </AppBarElementContainer>
+            <AppBarSeparator />
+            <AppBarButton Icon="Sort" Label="Sort">
+                <AppBarButton.Flyout>
+                    <MenuFlyout>
+                        <MenuFlyoutItem Text="Name (A-Z)" Click="SortByName_Click" Tag="NameAsc" />
+                        <MenuFlyoutItem Text="Name (Z-A)" Click="SortByName_Click" Tag="NameDesc" />
+                        <MenuFlyoutItem Text="Source" Click="SortBySource_Click" />
+                    </MenuFlyout>
+                </AppBarButton.Flyout>
+            </AppBarButton>
             <CommandBar.Content>
                 <AutoSuggestBox x:Name="SearchBox" 
                                 QueryIcon="Find" 
