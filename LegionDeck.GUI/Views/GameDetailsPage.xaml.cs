@@ -54,8 +54,16 @@ public sealed partial class GameDetailsPage : Page
                 _ = LoadHeroImageAsync(libraryVM, libraryVM.GameData.Id);
             }
 
-            PlayButton.Visibility = Visibility.Visible;
-            GameDescription.Text = $"This game is installed from {libraryVM.Source}.";
+            if (libraryVM.GameData.IsInstalled)
+            {
+                PlayButton.Visibility = Visibility.Visible;
+                GameDescription.Text = $"This game is installed from {libraryVM.Source}.";
+            }
+            else
+            {
+                InstallButton.Visibility = Visibility.Visible;
+                GameDescription.Text = $"This game is in your {libraryVM.Source} library but not installed.";
+            }
             
             // Check cache for description
             var cachedDesc = _metadataService.GetDescription(libraryVM.GameData.Id);
@@ -210,6 +218,15 @@ public sealed partial class GameDetailsPage : Page
         }
     }
 
+    private void InstallButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_gameViewModel is LibraryGameViewModel libraryVM && libraryVM.Source == "Steam")
+        {
+            var uri = $"steam://install/{libraryVM.GameData.Id}";
+            Process.Start(new ProcessStartInfo(uri) { UseShellExecute = true });
+        }
+    }
+
     private void StoreButton_Click(object sender, RoutedEventArgs e)
     {
         if (_gameViewModel is SteamWishlistItemViewModel wishlistVM)
@@ -233,10 +250,13 @@ public sealed partial class GameDetailsPage : Page
         {
             PlayButton.Focus(FocusState.Programmatic);
         }
+        else if (InstallButton.Visibility == Visibility.Visible)
+        {
+            InstallButton.Focus(FocusState.Programmatic);
+        }
         else
         {
             // Focus whatever button is available, maybe the last one (Back)
-            // Or just the first focusable child
         }
     }
 }

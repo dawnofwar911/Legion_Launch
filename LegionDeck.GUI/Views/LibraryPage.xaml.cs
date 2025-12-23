@@ -18,7 +18,12 @@ public sealed partial class LibraryPage : Page
     private readonly MetadataService _metadataService;
     private readonly GameEnrichmentService _enrichmentService;
     private readonly ConfigService _configService;
-    private readonly SteamLibraryService _steamLibraryService = new();
+    private readonly SteamLibraryService _steamLibraryService;
+    private string _currentMode = "";
+    private bool _isDataLoaded = false;
+    private bool _isReturning = false;
+    private readonly System.Threading.SemaphoreSlim _refreshSemaphore = new(1, 1);
+    private System.Threading.CancellationTokenSource? _enrichmentCts;
 
     public LibraryPage()
     {
@@ -26,6 +31,7 @@ public sealed partial class LibraryPage : Page
         this.AllowFocusOnInteraction = true;
         
         _configService = new ConfigService();
+        _steamLibraryService = new SteamLibraryService(_configService);
         _sgdbService = new SteamGridDbService(_configService);
         _metadataService = new MetadataService();
         _enrichmentService = new GameEnrichmentService(_configService, _metadataService);
@@ -36,18 +42,38 @@ public sealed partial class LibraryPage : Page
 
     private async void ViewMode_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
+        if (_isReturning) return; 
+
+        string newMode = "Installed";
+        if (ViewModeCombo != null && ViewModeCombo.SelectedItem is ComboBoxItem comboItem && comboItem.Tag != null)
+        {
+            newMode = comboItem.Tag.ToString() ?? "Installed";
+        }
+
+        // Prevent reload if mode hasn't changed AND we have data
+        if (newMode == _currentMode && _isDataLoaded) return;
+
         await RefreshLibraryAsync();
     }
 
-    protected override async void OnNavigatedTo(Microsoft.UI.Xaml.Navigation.NavigationEventArgs e)
+    protected override void OnNavigatingFrom(Microsoft.UI.Xaml.Navigation.NavigatingCancelEventArgs e)
+    {
+        // Cancel background work when leaving page
+        _enrichmentCts?.Cancel();
+        base.OnNavigatingFrom(e);
+    }
+
+    protected override void OnNavigatedTo(Microsoft.UI.Xaml.Navigation.NavigationEventArgs e)
     {
         base.OnNavigatedTo(e);
         
         if (e.NavigationMode == Microsoft.UI.Xaml.Navigation.NavigationMode.Back)
         {
-            // Restore focus to grid when coming back
-            await Task.Delay(100);
-            LibraryGridView.Focus(FocusState.Programmatic);
+            _isReturning = true;
+        }
+        else
+        {
+            _isReturning = false;
         }
     }
 
@@ -55,31 +81,31 @@ public sealed partial class LibraryPage : Page
     {
         try
         {
-            Log("LibraryPage_Loaded started");
-            // Only refresh if we haven't loaded games yet (NavigationCacheMode handles the rest)
-            // But check if view mode changed
-            if (_allGames.Count == 0) await RefreshLibraryAsync();
+            Log($"LibraryPage_Loaded (Returning: {_isReturning}, DataLoaded: {_isDataLoaded})");
             
-            // Aggressively set focus for controller
+            // Focus logic
             await Task.Delay(100);
-            
             if (InstalledGames.Any())
             {
                 if (LibraryGridView.SelectedIndex < 0) LibraryGridView.SelectedIndex = 0;
-                
                 var container = LibraryGridView.ContainerFromIndex(LibraryGridView.SelectedIndex) as Control;
                 container?.Focus(FocusState.Programmatic);
             }
+
+            // Only refresh if we haven't loaded anything yet
+            if (!_isDataLoaded)
+            {
+                await RefreshLibraryAsync();
+            }
             
-            Log("LibraryPage_Loaded completed");
+            _isReturning = false; 
         }
         catch (Exception ex)
         {
-            Log($"Error in LibraryPage_Loaded: {ex.Message}\n{ex.StackTrace}");
+            Log($"Error in LibraryPage_Loaded: {ex.Message}");
         }
     }
 
-    // ... existing Log method ...
     private void Log(string message)
     {
         try
@@ -113,25 +139,37 @@ public sealed partial class LibraryPage : Page
 
     private async Task RefreshLibraryAsync()
     {
+        // Cancel any existing enrichment
+        _enrichmentCts?.Cancel();
+        _enrichmentCts = new System.Threading.CancellationTokenSource();
+
+        if (!await _refreshSemaphore.WaitAsync(0)) return; // Prevent concurrent refreshes
+
         try
         {
             Log("RefreshLibraryAsync started");
-            _allGames.Clear();
+            if (LoadingRing != null) LoadingRing.IsActive = true;
+            if (NoGamesText != null) NoGamesText.Visibility = Visibility.Collapsed;
             
-            string mode = (ViewModeCombo.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "Installed";
+            _allGames.Clear();
+            InstalledGames.Clear(); 
+            
+            string mode = "Installed";
+            if (ViewModeCombo != null && ViewModeCombo.SelectedItem is ComboBoxItem comboItem && comboItem.Tag != null)
+            {
+                mode = comboItem.Tag.ToString() ?? "Installed";
+            }
+            
+            _currentMode = mode;
 
             if (mode == "Installed")
             {
                 var games = await _libraryService.GetInstalledGamesAsync();
-                Log($"Found {games.Count} installed games");
-                
                 foreach (var game in games)
                 {
                     var vm = new LibraryGameViewModel(game);
-                    
                     var cachedName = _metadataService.GetName(game.Id);
                     if (!string.IsNullOrEmpty(cachedName)) vm.Name = cachedName;
-
                     var cachedCover = _metadataService.GetCover(game.Id);
                     if (!string.IsNullOrEmpty(cachedCover)) vm.ImgCapsule = cachedCover;
                     _allGames.Add(vm);
@@ -140,28 +178,16 @@ public sealed partial class LibraryPage : Page
             else if (mode == "Steam")
             {
                 var items = await _steamLibraryService.GetOwnedGamesAsync();
-                Log($"Found {items.Count} Steam owned games");
-                
                 foreach (var item in items)
                 {
-                    // Create a dummy InstalledGame for the VM
-                    var gameData = new LocalLibraryService.InstalledGame
-                    {
-                        Id = item.AppId.ToString(),
-                        Name = item.Name, // Initially "AppID 12345"
-                        Source = "Steam",
-                        InstallPath = "",
-                        LaunchUri = "" // steam://run/id prompts install if not installed
-                    };
-                    
+                    var gameData = new LocalLibraryService.InstalledGame { Id = item.AppId.ToString(), Name = item.Name, Source = "Steam", IsInstalled = false };
                     var vm = new LibraryGameViewModel(gameData);
-
+                    var cachedType = _metadataService.GetType(gameData.Id);
+                    vm.Type = !string.IsNullOrEmpty(cachedType) ? cachedType : "unknown";
                     var cachedName = _metadataService.GetName(gameData.Id);
                     if (!string.IsNullOrEmpty(cachedName)) vm.Name = cachedName;
-
-                    // Pre-fill capsule if standard format
-                    vm.ImgCapsule = $"https://cdn.cloudflare.steamstatic.com/steam/apps/{item.AppId}/library_600x900_2x.jpg";
                     
+                    vm.ImgCapsule = $"https://cdn.cloudflare.steamstatic.com/steam/apps/{item.AppId}/library_600x900_2x.jpg";
                     var cachedCover = _metadataService.GetCover(item.AppId.ToString());
                     if (!string.IsNullOrEmpty(cachedCover)) vm.ImgCapsule = cachedCover;
 
@@ -169,74 +195,111 @@ public sealed partial class LibraryPage : Page
                 }
             }
             
-            ApplyFilter(SearchBox.Text);
+            ApplyFilter(SearchBox != null ? SearchBox.Text : "");
+            if (NoGamesText != null) NoGamesText.Visibility = InstalledGames.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
             
-            // Start background enrichment (Artwork + Descriptions)
-            _ = EnrichLibraryAsync();
-            
-            Log("RefreshLibraryAsync completed");
+            _isDataLoaded = true;
+            Log("RefreshLibraryAsync completed. Starting enrichment...");
+            _ = EnrichLibraryAsync(_enrichmentCts.Token);
         }
         catch (Exception ex)
         {
-            Log($"Error in RefreshLibraryAsync: {ex.Message}\n{ex.StackTrace}");
+            Log($"Error in RefreshLibraryAsync: {ex.Message}");
+        }
+        finally
+        {
+            if (LoadingRing != null) LoadingRing.IsActive = false;
+            _refreshSemaphore.Release();
         }
     }
 
-    private async Task EnrichLibraryAsync()
+    private async Task EnrichLibraryAsync(System.Threading.CancellationToken ct)
     {
-        var gamesToScan = _allGames.ToList(); // Copy to avoid collection modified errors
-        using var httpClient = new System.Net.Http.HttpClient();
+        var gamesToScan = _allGames.ToList(); // Copy
+        var enrichQueue = new System.Collections.Generic.List<(string Id, string Name, string Source)>();
 
         foreach (var game in gamesToScan)
         {
-            try
+            if (ct.IsCancellationRequested) return;
+
+            if (game.Source == "Steam")
             {
-                // 1. Basic Cover Art Logic (Legacy but essential for grid)
-                if (!_metadataService.HasCover(game.GameData.Id))
+                var cachedCover = _metadataService.GetCover(game.GameData.Id);
+                if (game.Type == "unknown" || 
+                    game.Name.StartsWith("AppID ") || 
+                    string.IsNullOrEmpty(cachedCover) || 
+                    cachedCover.Contains("steamstatic.com") || 
+                    cachedCover.Contains("cloudflare.steamstatic.com"))
                 {
-                    bool coverUpdated = false;
-                    if (game.Source == "Steam")
-                    {
-                        var defaultUrl = game.ImgCapsule;
-                        if (await IsUrlValidAsync(httpClient, defaultUrl))
-                        {
-                            _metadataService.SetCover(game.GameData.Id, defaultUrl);
-                            coverUpdated = true;
-                        }
-                    }
-
-                    if (!coverUpdated)
-                    {
-                        var gameId = await _sgdbService.SearchGameIdAsync(game.Name);
-                        if (gameId.HasValue)
-                        {
-                            var coverUrl = await _sgdbService.GetVerticalCoverByGameIdAsync(gameId.Value);
-                            if (!string.IsNullOrEmpty(coverUrl))
-                            {
-                                UpdateGameCover(game, coverUrl);
-                            }
-                        }
-                    }
+                    enrichQueue.Add((game.GameData.Id, game.Name, game.Source));
                 }
-
-                // 2. Full Enrichment (Name + Hero + Description)
-                await _enrichmentService.EnrichGameAsync(game.GameData.Id, game.Name, game.Source);
-                
-                // If name was updated in cache, update VM
-                var realName = _metadataService.GetName(game.GameData.Id);
-                if (!string.IsNullOrEmpty(realName) && game.Name != realName)
-                {
-                    UpdateGameName(game, realName);
-                }
-
-                // Small delay to be polite to APIs
-                await Task.Delay(250);
-            }
-            catch (Exception ex)
-            {
-                Log($"Error enriching {game.Name}: {ex.Message}");
             }
         }
+
+        try
+        {
+            Action<string, SteamStoreService.SteamStoreDetails> onGameUpdated = (idStr, details) =>
+            {
+                if (ct.IsCancellationRequested) return;
+
+                this.DispatcherQueue.TryEnqueue(() =>
+                {
+                    var gameVm = _allGames.FirstOrDefault(g => g.GameData.Id == idStr);
+                    if (gameVm != null)
+                    {
+                        if (!string.IsNullOrEmpty(details.Name) && gameVm.Name != details.Name)
+                        {
+                            gameVm.Name = details.Name;
+                        }
+
+                        if (!string.IsNullOrEmpty(details.Type) && gameVm.Type != details.Type)
+                        {
+                            gameVm.Type = details.Type;
+                            if (gameVm.Source == "Steam" && !string.Equals(gameVm.Type, "game", StringComparison.OrdinalIgnoreCase))
+                            {
+                                if (InstalledGames.Contains(gameVm)) InstalledGames.Remove(gameVm);
+                            }
+                        }
+                        
+                        string? imageToUse = !string.IsNullOrEmpty(details.VerticalCover) ? details.VerticalCover : null;
+                        if (string.IsNullOrEmpty(imageToUse) && !string.IsNullOrEmpty(details.HeaderImage))
+                        {
+                             bool isLandscapeHeader = details.HeaderImage.Contains("header.jpg") && details.HeaderImage.Contains("steamstatic.com");
+                             if (!isLandscapeHeader) imageToUse = details.HeaderImage;
+                        }
+
+                        if (!string.IsNullOrEmpty(imageToUse))
+                        {
+                             if (string.IsNullOrEmpty(gameVm.ImgCapsule) || 
+                                 gameVm.ImgCapsule.Contains("cloudflare.steamstatic.com") || 
+                                 gameVm.ImgCapsule.Contains("library_600x900") ||
+                                 details.VerticalCover != null) 
+                             {
+                                 gameVm.ImgCapsule = imageToUse;
+                                 _metadataService.SetCover(idStr, imageToUse);
+                             }
+                        }
+                    }
+                });
+            };
+
+            await _enrichmentService.EnrichGamesBatchAsync(enrichQueue, onGameUpdated);
+            
+            this.DispatcherQueue.TryEnqueue(() => 
+            {
+                if (!ct.IsCancellationRequested)
+                    ApplyFilter(SearchBox != null ? SearchBox.Text : "");
+            });
+        }
+        catch (Exception ex)
+        {
+            Log($"Batch enrichment error: {ex.Message}");
+        }
+    }
+
+    private void RemoveGame(LibraryGameViewModel game)
+    {
+        // No longer needed, filtering handles it
     }
 
     private void UpdateGameName(LibraryGameViewModel game, string name)
@@ -272,19 +335,16 @@ public sealed partial class LibraryPage : Page
 
     private async void Image_ImageFailed(object sender, ExceptionRoutedEventArgs e)
     {
-        if (e.ErrorMessage == "E_NETWORK_ERROR") return; // Ignore transient network issues?
+        if (e.ErrorMessage == "E_NETWORK_ERROR") return; 
         
-        // Find the ViewModel associated with this image
         if (sender is Image img && img.DataContext is LibraryGameViewModel vm)
         {
             Log($"Image failed for {vm.Name} ({vm.Source}). Attempting SGDB fallback.");
             
-            // If it's a Steam game failing, try to fetch via SGDB
             if (vm.Source == "Steam")
             {
                 try
                 {
-                    // For Steam games, we can search by AppID directly which is more accurate
                     if (int.TryParse(vm.GameData.Id, out int steamAppId))
                     {
                         var coverUrl = await _sgdbService.GetVerticalCoverAsync(steamAppId);
@@ -298,7 +358,6 @@ public sealed partial class LibraryPage : Page
                 catch { }
             }
             
-            // Fallback: Search by name if AppID lookup failed or not Steam
             try
             {
                 var gameId = await _sgdbService.SearchGameIdAsync(vm.Name);
@@ -315,6 +374,21 @@ public sealed partial class LibraryPage : Page
         }
     }
 
+    private void HideGame_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is MenuFlyoutItem item && item.DataContext is LibraryGameViewModel vm)
+        {
+            Log($"Hiding game: {vm.Name}");
+            _metadataService.SetHidden(vm.GameData.Id, true);
+            
+            // Remove from visible collection directly to maintain scroll position
+            InstalledGames.Remove(vm);
+            
+            // Also remove from master list so it doesn't reappear on filter changes
+            _allGames.Remove(vm);
+        }
+    }
+
     private void ApplyFilter(string filter)
     {
         InstalledGames.Clear();
@@ -324,6 +398,22 @@ public sealed partial class LibraryPage : Page
 
         foreach (var game in filtered)
         {
+            // Persistent Hidden Check
+            if (_metadataService.IsHidden(game.GameData.Id))
+            {
+                continue;
+            }
+
+            // Strict filtering: If Steam, must be 'game' or 'unknown'. 
+            // We hide 'dlc', 'music', 'tool', etc.
+            if (game.Source == "Steam")
+            {
+                if (!string.Equals(game.Type, "game", StringComparison.OrdinalIgnoreCase) && 
+                    !string.Equals(game.Type, "unknown", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+            }
             InstalledGames.Add(game);
         }
     }

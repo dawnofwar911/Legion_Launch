@@ -38,6 +38,20 @@ public class LibraryGameViewModel : INotifyPropertyChanged
         }
     }
 
+    private string _type = "game"; // Default to game, but for Steam we might check
+    public string Type
+    {
+        get => _type;
+        set
+        {
+            if (_type != value)
+            {
+                _type = value;
+                OnPropertyChanged();
+            }
+        }
+    }
+
     public event PropertyChangedEventHandler? PropertyChanged;
 
     public LibraryGameViewModel(LocalLibraryService.InstalledGame game)

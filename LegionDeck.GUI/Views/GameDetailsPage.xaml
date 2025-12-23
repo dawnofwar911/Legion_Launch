@@ -36,6 +36,12 @@
                             <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#FF1E8449" />
                         </Button.Resources>
                     </Button>
+                    <Button x:Name="InstallButton" Content="Install" Background="#FF2980B9" Foreground="White" Width="150" Height="45" Click="InstallButton_Click" Visibility="Collapsed" UseSystemFocusVisuals="True">
+                        <Button.Resources>
+                            <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#FF3498DB" />
+                            <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#FF2471A3" />
+                        </Button.Resources>
+                    </Button>
                     <Button x:Name="StoreButton" Content="Open in Store" Width="150" Height="45" Click="StoreButton_Click" Visibility="Collapsed" UseSystemFocusVisuals="True" />
                     <Button Content="Back" Width="150" Height="45" Click="BackButton_Click" UseSystemFocusVisuals="True" />
                 </StackPanel>

@@ -17,6 +17,8 @@ namespace LegionDeck.Core.Services;
 
 public class SteamAuthService : IAuthService
 {
+    private static readonly SemaphoreSlim _webViewSemaphore = new(1, 1);
+
     private void Log(string message)
     {
         try
@@ -45,92 +47,117 @@ public class SteamAuthService : IAuthService
         }
     }
 
-    public Task<string?> LoginAsync()
+    public async Task<string?> LoginAsync()
     {
-        var tcs = new TaskCompletionSource<string?>();
-
-        var thread = new Thread(() =>
+        await _webViewSemaphore.WaitAsync();
+        try
         {
-            try
+            var tcs = new TaskCompletionSource<string?>();
+
+            var thread = new Thread(() =>
             {
-                Log("Starting interactive LoginAsync thread");
-                Application.SetHighDpiMode(HighDpiMode.SystemAware);
-                Application.EnableVisualStyles();
-                Application.SetCompatibleTextRenderingDefault(false);
+                try
+                {
+                    Log("Starting interactive LoginAsync thread");
+                    Application.SetHighDpiMode(HighDpiMode.SystemAware);
+                    Application.EnableVisualStyles();
+                    Application.SetCompatibleTextRenderingDefault(false);
 
-                var form = new SteamLoginForm(tcs, null); 
-                Application.Run(form);
-                Log("Interactive login form closed");
-            }
-            catch (Exception ex)
-            {
-                Log($"LoginAsync thread exception: {ex.Message}");
-                tcs.TrySetException(ex);
-            }
-        });
+                    var form = new SteamLoginForm(tcs, null); 
+                    Application.Run(form);
+                    Log("Interactive login form closed");
+                }
+                catch (Exception ex)
+                {
+                    Log($"LoginAsync thread exception: {ex.Message}");
+                    tcs.TrySetException(ex);
+                }
+            });
 
-        thread.SetApartmentState(ApartmentState.STA);
-        thread.Start();
+            thread.SetApartmentState(ApartmentState.STA);
+            thread.Start();
 
-        return tcs.Task;
+            return await tcs.Task;
+        }
+        finally
+        {
+            _webViewSemaphore.Release();
+        }
     }
 
     public async Task<bool> RefreshSessionAsync()
     {
-        var tcs = new TaskCompletionSource<string?>();
-
-        var thread = new Thread(() =>
+        await _webViewSemaphore.WaitAsync();
+        try
         {
-            try
-            {
-                Log("Starting silent RefreshSessionAsync thread");
-                Application.SetHighDpiMode(HighDpiMode.SystemAware);
-                Application.EnableVisualStyles();
-                Application.SetCompatibleTextRenderingDefault(false);
+            var tcs = new TaskCompletionSource<string?>();
 
-                // Use the new silent parameter
-                var authTokensPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LegionDeck", "AuthTokens");
-                var cookiePath = Path.Combine(authTokensPath, "steam_cookies.json");
-                var form = new SteamLoginForm(tcs, null, silent: true, cookiePath: cookiePath); 
-                Application.Run(form);
-                Log("Silent refresh form closed");
-            }
-            catch (Exception ex)
+            var thread = new Thread(() =>
             {
-                Log($"RefreshSessionAsync thread exception: {ex.Message}");
-                tcs.TrySetException(ex);
-            }
-        });
+                try
+                {
+                    Log("Starting silent RefreshSessionAsync thread");
+                    Application.SetHighDpiMode(HighDpiMode.SystemAware);
+                    Application.EnableVisualStyles();
+                    Application.SetCompatibleTextRenderingDefault(false);
 
-        thread.SetApartmentState(ApartmentState.STA);
-        thread.Start();
+                    // Use the new silent parameter
+                    var authTokensPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LegionDeck", "AuthTokens");
+                    var cookiePath = Path.Combine(authTokensPath, "steam_cookies.json");
+                    var form = new SteamLoginForm(tcs, null, silent: true, cookiePath: cookiePath); 
+                    Application.Run(form);
+                    Log("Silent refresh form closed");
+                }
+                catch (Exception ex)
+                {
+                    Log($"RefreshSessionAsync thread exception: {ex.Message}");
+                    tcs.TrySetException(ex);
+                }
+            });
 
-        // Wait for result with timeout
-        var completedTask = await Task.WhenAny(tcs.Task, Task.Delay(15000)); // 15s timeout
-        if (completedTask == tcs.Task)
-        {
-            try 
+            thread.SetApartmentState(ApartmentState.STA);
+            thread.Start();
+
+            // Wait for result with timeout
+            var completedTask = await Task.WhenAny(tcs.Task, Task.Delay(15000)); // 15s timeout
+            if (completedTask == tcs.Task)
             {
-                var result = await tcs.Task;
-                Log($"RefreshSessionAsync result: {result}");
-                return result == "SteamLoggedIn";
+                try 
+                {
+                    var result = await tcs.Task;
+                    Log($"RefreshSessionAsync result: {result}");
+                    return result == "SteamLoggedIn";
+                }
+                catch (Exception ex)
+                {
+                    Log($"RefreshSessionAsync task exception: {ex.Message}");
+                    return false;
+                }
             }
-            catch (Exception ex)
+            else
             {
-                Log($"RefreshSessionAsync task exception: {ex.Message}");
-                return false;
+                 Log("RefreshSessionAsync timed out");
+                 return false;
             }
         }
-        else
+        finally
         {
-             Log("RefreshSessionAsync timed out");
-             return false;
+            _webViewSemaphore.Release();
         }
     }
 
     public static async Task<(string pageContent, string finalUrl)> FetchProtectedPageAsync(string url, string cookieJsonPath)
     {
         // Attempt to fetch directly with HttpClient if cookies exist
+        if (!File.Exists(cookieJsonPath))
+        {
+             try
+             {
+                 var logPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LegionDeck", "startup.log");
+                 File.AppendAllText(logPath, $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - [SteamAuthService] Cookie file missing at: {cookieJsonPath}. Falling back to WebView2.\n");
+             } catch {}
+        }
+
         if (File.Exists(cookieJsonPath))
         {
             try
@@ -139,6 +166,7 @@ public class SteamAuthService : IAuthService
                 var handler = new HttpClientHandler { CookieContainer = cookieContainer };
                 using var httpClient = new HttpClient(handler);
                 httpClient.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"); 
+                httpClient.DefaultRequestHeaders.Add("Referer", "https://store.steampowered.com/");
 
                 // Load cookies from JSON and inject into CookieContainer
                 var json = await File.ReadAllTextAsync(cookieJsonPath);
@@ -182,36 +210,56 @@ public class SteamAuthService : IAuthService
                     // Basic check to see if content is likely what we expect (e.g., JSON for dynamicstore/userdata)
                     if (url.Contains("dynamicstore/userdata/") && content.Trim().StartsWith("{") || !url.Contains("dynamicstore/userdata/"))
                     {
-                        Console.WriteLine("[Debug] Successfully fetched protected page directly with HttpClient.");
+                        try
+                        {
+                            var logPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LegionDeck", "startup.log");
+                            File.AppendAllText(logPath, $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - [SteamAuthService] [Debug] Successfully fetched protected page directly with HttpClient.\n");
+                        } catch {}
                         return (content, response.RequestMessage.RequestUri.ToString());
                     }
                 }
-                Console.WriteLine($"[Debug] HttpClient direct fetch failed or redirected to login for {url}. Status: {response.StatusCode}. Falling back to WebView2.");
+                try
+                {
+                    var logPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LegionDeck", "startup.log");
+                    File.AppendAllText(logPath, $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - [SteamAuthService] [Debug] HttpClient direct fetch failed or redirected to login for {url}. Status: {response.StatusCode}. Falling back to WebView2.\n");
+                } catch {}
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[Warning] HttpClient direct fetch failed: {ex.Message}. Falling back to WebView2.");
+                try
+                {
+                    var logPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LegionDeck", "startup.log");
+                    File.AppendAllText(logPath, $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - [SteamAuthService] [Warning] HttpClient direct fetch failed: {ex.Message}. Falling back to WebView2.\n");
+                } catch {}
             }
         }
 
         // Fallback to WebView2 if HttpClient direct fetch fails or cookies don't exist
-        var tcs = new TaskCompletionSource<(string, string)>();
-        var thread = new Thread(() =>
+        await _webViewSemaphore.WaitAsync();
+        try
         {
-            try
+            var tcs = new TaskCompletionSource<(string, string)>();
+            var thread = new Thread(() =>
             {
-                Application.SetHighDpiMode(HighDpiMode.SystemAware);
-                Application.EnableVisualStyles();
-                Application.SetCompatibleTextRenderingDefault(false);
-                
-                var form = new SteamLoginForm(null, url, tcs, cookieJsonPath); 
-                Application.Run(form);
-            }
-            catch (Exception ex) { tcs.TrySetException(ex); }
-        });
-        thread.SetApartmentState(ApartmentState.STA);
-        thread.Start();
-        return await tcs.Task;
+                try
+                {
+                    Application.SetHighDpiMode(HighDpiMode.SystemAware);
+                    Application.EnableVisualStyles();
+                    Application.SetCompatibleTextRenderingDefault(false);
+                    
+                    var form = new SteamLoginForm(null, url, tcs, cookieJsonPath); 
+                    Application.Run(form);
+                }
+                catch (Exception ex) { tcs.TrySetException(ex); }
+            });
+            thread.SetApartmentState(ApartmentState.STA);
+            thread.Start();
+            return await tcs.Task;
+        }
+        finally
+        {
+            _webViewSemaphore.Release();
+        }
     }
 }
 
@@ -237,8 +285,11 @@ public class SteamLoginForm : Form
         if (_isSilent)
         {
             this.ShowInTaskbar = false;
-            this.WindowState = FormWindowState.Minimized;
-            this.Opacity = 0;
+            this.WindowState = FormWindowState.Normal;
+            this.FormBorderStyle = FormBorderStyle.FixedToolWindow;
+            this.StartPosition = FormStartPosition.Manual;
+            this.Location = new System.Drawing.Point(-32000, -32000);
+            this.Size = new System.Drawing.Size(1024, 768);
         }
     }
 
@@ -252,8 +303,12 @@ public class SteamLoginForm : Form
         _isSilent = true;
         InitializeComponentCommon();
         this.Text = "LegionDeck - Fetching Data...";
-        this.WindowState = FormWindowState.Minimized; 
-        this.ShowInTaskbar = false; 
+        this.ShowInTaskbar = false;
+        this.WindowState = FormWindowState.Normal;
+        this.FormBorderStyle = FormBorderStyle.FixedToolWindow;
+        this.StartPosition = FormStartPosition.Manual;
+        this.Location = new System.Drawing.Point(-32000, -32000);
+        this.Size = new System.Drawing.Size(1024, 768);
     }
 
     private void Log(string message)
@@ -276,19 +331,85 @@ public class SteamLoginForm : Form
         this.Controls.Add(_webView);
 
         this.Load += SteamLoginForm_Load;
+        this.FormClosed += SteamLoginForm_FormClosed;
+    }
+
+    private void SteamLoginForm_FormClosed(object? sender, FormClosedEventArgs e)
+    {
+        try
+        {
+            if (_webView != null && _webView.CoreWebView2 != null)
+            {
+                // Capture path before disposal
+                var path = _webView.CoreWebView2.Environment.UserDataFolder;
+                _webView.Dispose();
+
+                // If it was a temp folder, try to delete it
+                if (path.Contains("LegionDeck_WebView2_Temp"))
+                {
+                    Task.Run(async () => 
+                    {
+                        await Task.Delay(2000); // Wait for process to release lock
+                        try { Directory.Delete(path, true); } catch {}
+                    });
+                }
+            }
+            else
+            {
+                _webView?.Dispose();
+            }
+        }
+        catch { }
     }
 
     private async void SteamLoginForm_Load(object? sender, EventArgs e)
     {
         try
         {
+            // Delay to allow previous WebView2 process to release locks
+            await Task.Delay(500);
+
             Log("SteamLoginForm_Load started");
-            var userDataFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LegionDeck", "WebView2");
+            
+            // Use a unique folder for silent fetch to avoid locks/corruption
+            string userDataFolder;
+            if (_isSilent && _fetchResultTcs != null)
+            {
+                userDataFolder = Path.Combine(Path.GetTempPath(), "LegionDeck_WebView2_Temp", Guid.NewGuid().ToString());
+                Log($"Using temporary WebView2 profile for fetch: {userDataFolder}");
+            }
+            else
+            {
+                userDataFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LegionDeck", "WebView2");
+            }
+            
             Log($"Creating WebView2 environment with UserDataFolder: {userDataFolder}");
             
-            var env = await CoreWebView2Environment.CreateAsync(null, userDataFolder);
-            await _webView.EnsureCoreWebView2Async(env);
-            Log("WebView2 initialized successfully");
+            CoreWebView2Environment? env = null;
+            int retries = 3;
+            while (retries > 0)
+            {
+                try
+                {
+                    var options = new CoreWebView2EnvironmentOptions("--disable-gpu --disable-features=RendererCodeIntegrity");
+                    env = await CoreWebView2Environment.CreateAsync(null, userDataFolder, options);
+                    await _webView.EnsureCoreWebView2Async(env);
+                    Log("WebView2 initialized successfully");
+                    break;
+                }
+                catch (Exception initEx)
+                {
+                    retries--;
+                    Log($"WebView2 init failed (Retries left: {retries}): {initEx.Message}");
+                    if (retries == 0) throw;
+                    await Task.Delay(1000);
+                }
+            }
+
+            _webView.CoreWebView2.ProcessFailed += (s, args) =>
+            {
+                Log($"[Critical] WebView2 Process Failed. Kind: {args.ProcessFailedKind}, Reason: {args.Reason}, ExitCode: {args.ExitCode}");
+            };
 
             // Set a consistent User-Agent for the WebView2 instance
             _webView.CoreWebView2.Settings.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";

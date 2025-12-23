@@ -64,18 +64,27 @@
                   GettingFocus="LibraryGridView_GettingFocus">
             <GridView.ItemTemplate>
                 <DataTemplate x:DataType="models:LibraryGameViewModel">
-                    <Grid Width="180" Height="340" Margin="8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" CornerRadius="8">
+                    <Grid Width="180" Height="380" Margin="8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" CornerRadius="8">
+                        <Grid.ContextFlyout>
+                            <MenuFlyout>
+                                <MenuFlyoutItem Text="Hide Game" Click="HideGame_Click" Icon="HideBcc" />
+                            </MenuFlyout>
+                        </Grid.ContextFlyout>
                         <StackPanel Padding="0" Spacing="0">
-                            <Grid Height="240" Background="{ThemeResource ControlFillColorSecondaryBrush}" CornerRadius="8,8,0,0">
+                            <!-- 2:3 Aspect Ratio for Steam Artwork (180x270) -->
+                            <Grid Height="270" Background="{ThemeResource ControlFillColorSecondaryBrush}" CornerRadius="8,8,0,0">
                                 <Image Source="{x:Bind ImgCapsule, Mode=OneWay}" 
-                                       Stretch="UniformToFill" 
+                                       Stretch="Uniform" 
                                        VerticalAlignment="Center" 
                                        HorizontalAlignment="Center"
                                        ImageFailed="Image_ImageFailed" />
                             </Grid>
                             
                             <StackPanel Padding="10" Spacing="4">
-                                <TextBlock Text="{x:Bind Name}" FontWeight="Bold" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" FontSize="13" />
+                                <!-- Allow 2 lines for names -->
+                                <TextBlock Text="{x:Bind Name, Mode=OneWay}" FontWeight="Bold" 
+                                           TextWrapping="Wrap" MaxLines="2" Height="40"
+                                           TextTrimming="CharacterEllipsis" FontSize="13" />
                                 <TextBlock Text="READY TO PLAY" Foreground="#FF2ECC71" FontWeight="ExtraBold" FontSize="11" Margin="0,0,0,4" />
                                 <Grid>
                                     <Border Background="{x:Bind Source, Converter={StaticResource SourceToColorConverter}}" HorizontalAlignment="Left" CornerRadius="4" Padding="6,2" VerticalAlignment="Center">
@@ -88,5 +97,11 @@
                 </DataTemplate>
             </GridView.ItemTemplate>
         </GridView>
+
+        <TextBlock x:Name="NoGamesText" Grid.Row="1" Text="No games found. Check your filters or Settings." 
+                   HorizontalAlignment="Center" VerticalAlignment="Center" 
+                   Opacity="0.5" Visibility="Collapsed" Style="{ThemeResource SubtitleTextBlockStyle}" />
+        
+        <ProgressRing x:Name="LoadingRing" Grid.Row="1" IsActive="False" Width="60" Height="60" />
     </Grid>
 </Page>

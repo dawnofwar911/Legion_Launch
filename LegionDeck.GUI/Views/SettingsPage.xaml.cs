@@ -56,6 +56,7 @@ public sealed partial class SettingsPage : Page
     {
         ItadKeyBox.Password = _configService.GetApiKey("ITAD") ?? string.Empty;
         SgdbKeyBox.Password = _configService.GetApiKey("SGDB") ?? string.Empty;
+        SteamApiKeyBox.Password = _configService.GetApiKey("STEAM") ?? string.Empty;
         IgdbClientIdBox.Text = _configService.GetApiKey("IGDB_CLIENT_ID") ?? string.Empty;
         IgdbClientSecretBox.Password = _configService.GetApiKey("IGDB_CLIENT_SECRET") ?? string.Empty;
     }
@@ -64,15 +65,17 @@ public sealed partial class SettingsPage : Page
     {
         var itadKey = ItadKeyBox.Password.Trim();
         var sgdbKey = SgdbKeyBox.Password.Trim();
+        var steamKey = SteamApiKeyBox.Password.Trim();
         var igdbClientId = IgdbClientIdBox.Text.Trim();
         var igdbClientSecret = IgdbClientSecretBox.Password.Trim();
 
         _configService.SetApiKey("ITAD", itadKey);
         _configService.SetApiKey("SGDB", sgdbKey);
+        _configService.SetApiKey("STEAM", steamKey);
         _configService.SetApiKey("IGDB_CLIENT_ID", igdbClientId);
         _configService.SetApiKey("IGDB_CLIENT_SECRET", igdbClientSecret);
         
-        ShowInfoBar("Success", "API Keys saved.", InfoBarSeverity.Success);
+        ShowInfoBar("Success", "API Keys saved. Restart app for changes to take effect fully.", InfoBarSeverity.Success);
     }
 
     private async void SteamLogin_Click(object sender, RoutedEventArgs e)

@@ -1,6 +1,10 @@
 using System;
 using System.Threading.Tasks;
 using System.Diagnostics;
+using System.Linq;
+using System.Collections.Generic;
+using System.Threading;
+using System.IO;
 
 namespace LegionDeck.Core.Services;
 
@@ -10,6 +14,7 @@ public class GameEnrichmentService
     private readonly SteamStoreService _steamStoreService;
     private readonly IgdbService _igdbService;
     private readonly SteamGridDbService _sgdbService;
+    private int _consecutiveErrors = 0;
 
     public GameEnrichmentService(ConfigService configService, MetadataService metadataService)
     {
@@ -19,89 +24,155 @@ public class GameEnrichmentService
         _sgdbService = new SteamGridDbService(configService);
     }
 
-    public async Task EnrichGameAsync(string gameId, string gameName, string source)
+    public async Task<Dictionary<string, SteamStoreService.SteamStoreDetails>> EnrichGamesBatchAsync(
+        List<(string Id, string Name, string Source)> games,
+        Action<string, SteamStoreService.SteamStoreDetails>? onGameUpdated = null)
     {
-        // 1. Enrich Name (especially for Steam Library where we only have ID)
-        if (!_metadataService.HasName(gameId) || gameName.StartsWith("AppID "))
-        {
-            string? realName = null;
-            if (source == "Steam" && int.TryParse(gameId, out int appId))
-            {
-                var details = await _steamStoreService.GetStoreDetailsAsync(appId);
-                if (details != null && !string.IsNullOrEmpty(details.Name))
-                {
-                    realName = details.Name;
-                }
-            }
+        var updatedDetails = new Dictionary<string, SteamStoreService.SteamStoreDetails>();
+        var steamIdsToFetch = new List<int>();
 
-            if (!string.IsNullOrEmpty(realName))
+        foreach (var game in games)
+        {
+            if (game.Source == "Steam" && int.TryParse(game.Id, out int appId) && appId > 0)
             {
-                _metadataService.SetName(gameId, realName);
-                gameName = realName; // Update local variable for next steps
-                Debug.WriteLine($"[Enrichment] Found name for {gameId}: {realName}");
+                var cachedCover = _metadataService.GetCover(game.Id);
+                if (!_metadataService.HasName(game.Id) || 
+                    game.Name.StartsWith("AppID ") || 
+                    !_metadataService.HasType(game.Id) || 
+                    string.IsNullOrEmpty(cachedCover) || 
+                    cachedCover.Contains("steamstatic.com"))
+                {
+                    steamIdsToFetch.Add(appId);
+                }
             }
         }
 
-        // 2. Enrich Hero Image
+        try
+        {
+            var logPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LegionDeck", "startup.log");
+            File.AppendAllText(logPath, $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - [GameEnrichmentService] Starting enrichment for {steamIdsToFetch.Count} Steam items.\n");
+        } catch {}
+
+        int concurrencyLevel = 5; 
+        var batchTasks = new List<Task>();
+        int processedCount = 0;
+        _consecutiveErrors = 0;
+
+        for (int i = 0; i < steamIdsToFetch.Count; i++)
+        {
+            var appId = steamIdsToFetch[i];
+            
+            batchTasks.Add(Task.Run(async () =>
+            {
+                var idStr = appId.ToString();
+                
+                // 1. Try SGDB Cover (Vertical)
+                try 
+                {
+                    var cached = _metadataService.GetCover(idStr);
+                    if (string.IsNullOrEmpty(cached) || cached.Contains("steamstatic.com"))
+                    {
+                        var sgdbCover = await _sgdbService.GetVerticalCoverAsync(appId);
+                        if (string.IsNullOrEmpty(sgdbCover))
+                        {
+                            var name = _metadataService.GetName(idStr);
+                            if (!string.IsNullOrEmpty(name))
+                            {
+                                var sgdbId = await _sgdbService.SearchGameIdAsync(name);
+                                if (sgdbId.HasValue) sgdbCover = await _sgdbService.GetVerticalCoverByGameIdAsync(sgdbId.Value);
+                            }
+                        }
+
+                        if (!string.IsNullOrEmpty(sgdbCover))
+                        {
+                            _metadataService.SetCover(idStr, sgdbCover);
+                            var coverDetails = new SteamStoreService.SteamStoreDetails 
+                            { 
+                                VerticalCover = sgdbCover, 
+                                Name = _metadataService.GetName(idStr) ?? $"AppID {appId}" 
+                            };
+                            onGameUpdated?.Invoke(idStr, coverDetails);
+                        }
+                    }
+                } catch {}
+
+                // 2. Try Steam Store (Type/Desc)
+                SteamStoreService.SteamStoreDetails? details = null;
+                try
+                {
+                    details = await _steamStoreService.GetStoreDetailsAsync(appId);
+                }
+                catch (System.Net.Http.HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.TooManyRequests || ex.StatusCode == System.Net.HttpStatusCode.Forbidden)
+                {
+                    await Task.Delay(60000); 
+                    try { details = await _steamStoreService.GetStoreDetailsAsync(appId); } catch { }
+                }
+                catch { }
+
+                if (details != null)
+                {
+                    Interlocked.Exchange(ref _consecutiveErrors, 0);
+                    bool updated = false;
+                    if (!string.IsNullOrEmpty(details.Name)) { _metadataService.SetName(idStr, details.Name); updated = true; }
+                    if (!string.IsNullOrEmpty(details.ShortDescription)) _metadataService.SetDescription(idStr, details.ShortDescription);
+                    if (!string.IsNullOrEmpty(details.Type)) { _metadataService.SetType(idStr, details.Type); updated = true; }
+                    
+                    if (updated) onGameUpdated?.Invoke(idStr, details);
+                    lock(updatedDetails) { updatedDetails[idStr] = details; }
+                }
+                else
+                {
+                    Interlocked.Increment(ref _consecutiveErrors);
+                }
+                
+                Interlocked.Increment(ref processedCount);
+            }));
+
+            if (batchTasks.Count >= concurrencyLevel)
+            {
+                await Task.WhenAny(batchTasks);
+                batchTasks.RemoveAll(t => t.IsCompleted);
+                await Task.Delay(2000); 
+            }
+        }
+        
+        await Task.WhenAll(batchTasks);
+        return updatedDetails;
+    }
+
+    public async Task EnrichGameAsync(string gameId, string gameName, string source)
+    {
+        if (!_metadataService.HasName(gameId) || gameName.StartsWith("AppID "))
+        {
+            if (source == "Steam" && int.TryParse(gameId, out int appId))
+            {
+                var details = await _steamStoreService.GetStoreDetailsAsync(appId);
+                if (details != null && !string.IsNullOrEmpty(details.Name)) _metadataService.SetName(gameId, details.Name);
+            }
+        }
+
         if (!_metadataService.HasHero(gameId))
         {
             string? heroUrl = null;
-            if (source == "Steam" && int.TryParse(gameId, out int appId))
-            {
-                heroUrl = await _sgdbService.GetHeroImageAsync(appId);
-            }
-            
+            if (source == "Steam" && int.TryParse(gameId, out int appId)) heroUrl = await _sgdbService.GetHeroImageAsync(appId);
             if (string.IsNullOrEmpty(heroUrl))
             {
-                // Try searching by name if Steam ID failed or it's not a Steam game
                 var sgdbId = await _sgdbService.SearchGameIdAsync(gameName);
-                if (sgdbId.HasValue)
-                {
-                    heroUrl = await _sgdbService.GetHeroImageByGameIdAsync(sgdbId.Value);
-                }
+                if (sgdbId.HasValue) heroUrl = await _sgdbService.GetHeroImageByGameIdAsync(sgdbId.Value);
             }
-
-            if (!string.IsNullOrEmpty(heroUrl))
-            {
-                _metadataService.SetHero(gameId, heroUrl);
-                Debug.WriteLine($"[Enrichment] Found hero for {gameName}");
-            }
+            if (!string.IsNullOrEmpty(heroUrl)) _metadataService.SetHero(gameId, heroUrl);
         }
 
-        // 2. Enrich Description
         if (!_metadataService.HasDescription(gameId))
         {
             string? description = null;
-            
-            // Try Steam first
             if (source == "Steam" && int.TryParse(gameId, out int appId))
             {
                 var details = await _steamStoreService.GetStoreDetailsAsync(appId);
-                if (details != null && !string.IsNullOrEmpty(details.ShortDescription))
-                {
-                    description = details.ShortDescription;
-                }
+                if (details != null) description = details.ShortDescription;
             }
-            else if (int.TryParse(gameId, out int steamAppId)) // Even if source != Steam, ID might be AppID (e.g. wishlist)
-            {
-                 var details = await _steamStoreService.GetStoreDetailsAsync(steamAppId);
-                 if (details != null && !string.IsNullOrEmpty(details.ShortDescription))
-                 {
-                     description = details.ShortDescription;
-                 }
-            }
-
-            // Fallback to IGDB
-            if (string.IsNullOrEmpty(description))
-            {
-                description = await _igdbService.GetGameDescriptionAsync(gameName);
-            }
-
-            if (!string.IsNullOrEmpty(description))
-            {
-                _metadataService.SetDescription(gameId, description);
-                 Debug.WriteLine($"[Enrichment] Found description for {gameName}");
-            }
+            if (string.IsNullOrEmpty(description)) description = await _igdbService.GetGameDescriptionAsync(gameName);
+            if (!string.IsNullOrEmpty(description)) _metadataService.SetDescription(gameId, description);
         }
     }
 }

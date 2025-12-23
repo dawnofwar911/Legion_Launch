@@ -25,6 +25,11 @@
             </StackPanel>
 
             <StackPanel Spacing="8">
+                <TextBlock Text="Steam Web API Key (Optional but Recommended)" Style="{ThemeResource BodyStrongTextBlockStyle}" />
+                <PasswordBox x:Name="SteamApiKeyBox" PlaceholderText="Enter Steam API Key (bypasses privacy settings)" Width="400" HorizontalAlignment="Left" PasswordRevealMode="Peek" UseSystemFocusVisuals="True" />
+            </StackPanel>
+
+            <StackPanel Spacing="8">
                 <TextBlock Text="IGDB Client ID" Style="{ThemeResource BodyStrongTextBlockStyle}" />
                 <TextBox x:Name="IgdbClientIdBox" PlaceholderText="Enter IGDB Client ID" Width="400" HorizontalAlignment="Left" UseSystemFocusVisuals="True" />
             </StackPanel>
