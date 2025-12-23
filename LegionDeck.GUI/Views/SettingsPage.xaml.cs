@@ -126,6 +126,23 @@ public sealed partial class SettingsPage : Page
         }
     }
 
+    private async void EALogin_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var eaAuth = new EaAuthService();
+            var result = await eaAuth.LoginAsync();
+            if (result == "EALoggedIn")
+            {
+                ShowInfoBar("EA", "Successfully authenticated with EA.", InfoBarSeverity.Success);
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowInfoBar("Error", $"EA Login failed: {ex.Message}", InfoBarSeverity.Error);
+        }
+    }
+
     private void ShowInfoBar(string title, string message, InfoBarSeverity severity)
     {
         FeedbackInfoBar.Title = title;

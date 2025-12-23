@@ -20,6 +20,9 @@
                 <ComboBox x:Name="ViewModeCombo" SelectionChanged="ViewMode_SelectionChanged" Width="150" VerticalAlignment="Center" Margin="0,0,8,0">
                     <ComboBoxItem Content="Installed" Tag="Installed" IsSelected="True" />
                     <ComboBoxItem Content="Steam Library" Tag="Steam" />
+                    <ComboBoxItem Content="Xbox / Game Pass" Tag="Xbox" />
+                    <ComboBoxItem Content="Ubisoft+ Library" Tag="Ubisoft" />
+                    <ComboBoxItem Content="EA Play Library" Tag="EA" />
                 </ComboBox>
             </AppBarElementContainer>
             <AppBarSeparator />

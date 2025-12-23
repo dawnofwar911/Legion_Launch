@@ -19,6 +19,7 @@ public sealed partial class LibraryPage : Page
     private readonly GameEnrichmentService _enrichmentService;
     private readonly ConfigService _configService;
     private readonly SteamLibraryService _steamLibraryService;
+    private readonly SubscriptionLibraryService _subLibraryService = new();
     private string _currentMode = "";
     private bool _isDataLoaded = false;
     private bool _isReturning = false;
@@ -194,6 +195,62 @@ public sealed partial class LibraryPage : Page
                     _allGames.Add(vm);
                 }
             }
+            else if (mode == "Xbox")
+            {
+                var xboxService = new XboxLibraryService();
+                
+                // 1. Fetch Personal Library (Owned/Played)
+                var personalItems = await xboxService.GetPersonalLibraryAsync();
+                Log($"Xbox Sync: Found {personalItems.Count} personal items.");
+                foreach (var item in personalItems)
+                {
+                    var gameData = new LocalLibraryService.InstalledGame { Id = item.Name, Name = item.Name, Source = "Xbox", IsInstalled = false };
+                    var vm = new LibraryGameViewModel(gameData);
+                    var cachedCover = _metadataService.GetCover(item.Name);
+                    if (!string.IsNullOrEmpty(cachedCover)) vm.ImgCapsule = cachedCover;
+                    _allGames.Add(vm);
+                }
+
+                // 2. Fetch Game Pass Catalog (Discovery)
+                var catalogItems = await _subLibraryService.GetXboxGamePassGamesAsync();
+                Log($"Xbox Sync: Found {catalogItems.Count} catalog items.");
+                foreach (var item in catalogItems)
+                {
+                    // Avoid duplicates if already in personal library
+                    if (_allGames.Any(g => g.Name.Equals(item.Name, StringComparison.OrdinalIgnoreCase))) continue;
+
+                    var gameData = new LocalLibraryService.InstalledGame { Id = item.Name, Name = item.Name, Source = "Xbox", IsInstalled = false };
+                    var vm = new LibraryGameViewModel(gameData);
+                    var cachedCover = _metadataService.GetCover(item.Name);
+                    if (!string.IsNullOrEmpty(cachedCover)) vm.ImgCapsule = cachedCover;
+                    _allGames.Add(vm);
+                }
+                Log($"Xbox Sync: Total combined items: {_allGames.Count}");
+            }
+            else if (mode == "Ubisoft")
+            {
+                var items = await _subLibraryService.GetUbisoftPlusGamesAsync();
+                foreach (var item in items)
+                {
+                    var gameData = new LocalLibraryService.InstalledGame { Id = item.Name, Name = item.Name, Source = "Ubisoft", IsInstalled = false };
+                    var vm = new LibraryGameViewModel(gameData);
+                    var cachedCover = _metadataService.GetCover(item.Name);
+                    if (!string.IsNullOrEmpty(cachedCover)) vm.ImgCapsule = cachedCover;
+                    _allGames.Add(vm);
+                }
+            }
+            else if (mode == "EA")
+            {
+                var items = await _subLibraryService.GetEaPlayGamesAsync();
+                foreach (var item in items)
+                {
+                    var gameData = new LocalLibraryService.InstalledGame { Id = item.Name, Name = item.Name, Source = "EA", IsInstalled = false };
+                    var vm = new LibraryGameViewModel(gameData);
+                    var cachedCover = _metadataService.GetCover(item.Name);
+                    if (!string.IsNullOrEmpty(cachedCover)) vm.ImgCapsule = cachedCover;
+                    _allGames.Add(vm);
+                }
+            }
             
             ApplyFilter(SearchBox != null ? SearchBox.Text : "");
             if (NoGamesText != null) NoGamesText.Visibility = InstalledGames.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
@@ -222,17 +279,16 @@ public sealed partial class LibraryPage : Page
         {
             if (ct.IsCancellationRequested) return;
 
-            if (game.Source == "Steam")
+            var cachedCover = _metadataService.GetCover(game.GameData.Id);
+            
+            // Queue if missing type/name or NO high-quality cover
+            if (game.Type == "unknown" || 
+                game.Name.StartsWith("AppID ") || 
+                string.IsNullOrEmpty(cachedCover) || 
+                cachedCover.Contains("steamstatic.com") || 
+                cachedCover.Contains("cloudflare.steamstatic.com"))
             {
-                var cachedCover = _metadataService.GetCover(game.GameData.Id);
-                if (game.Type == "unknown" || 
-                    game.Name.StartsWith("AppID ") || 
-                    string.IsNullOrEmpty(cachedCover) || 
-                    cachedCover.Contains("steamstatic.com") || 
-                    cachedCover.Contains("cloudflare.steamstatic.com"))
-                {
-                    enrichQueue.Add((game.GameData.Id, game.Name, game.Source));
-                }
+                enrichQueue.Add((game.GameData.Id, game.Name, game.Source));
             }
         }
 
@@ -276,7 +332,7 @@ public sealed partial class LibraryPage : Page
                                  details.VerticalCover != null) 
                              {
                                  gameVm.ImgCapsule = imageToUse;
-                                 _metadataService.SetCover(idStr, imageToUse);
+                                 _metadataService.SetCover(gameVm.GameData.Id, imageToUse);
                              }
                         }
                     }

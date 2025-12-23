@@ -4,65 +4,90 @@ using System.IO;
 using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
+using System.Net.Http;
+using System.Text;
 
 namespace LegionDeck.Core.Services;
 
 public class XboxDataService
 {
-    private readonly string _xboxCookieFilePath;
-
     public XboxDataService()
     {
-        var authTokensPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LegionDeck", "AuthTokens");
-        _xboxCookieFilePath = Path.Combine(authTokensPath, "xbox_cookies.json");
+    }
+
+    private void Log(string message)
+    {
+        try
+        {
+            var path = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LegionDeck", "startup.log");
+            File.AppendAllText(path, $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - [XboxDataService] {message}\n");
+        }
+        catch {{ }}
     }
 
     public async Task<string> GetGamePassSubscriptionDetailsAsync()
     {
-        if (!File.Exists(_xboxCookieFilePath))
+        var authService = new XboxAuthService();
+        var auth = await authService.GetXstsTokenAsync();
+
+        if (string.IsNullOrEmpty(auth.AuthHeader))
         {
-            Console.WriteLine("Xbox cookies not found. Please run 'legion auth --service xbox' first.");
-            return "Error: No Cookies";
+            return "None (Login Required)";
         }
 
-        // URL that usually indicates subscription status or a dashboard if logged in
+        // Use the legacy URL that we know used to work for scraping
         var subscriptionCheckUrl = "https://www.xbox.com/en-US/live/gold/my-gold-page"; 
 
         try
         {
-            var (pageContent, finalUrl) = await SteamAuthService.FetchProtectedPageAsync(subscriptionCheckUrl, _xboxCookieFilePath);
+            using var client = new HttpClient();
+            client.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)");
+            client.DefaultRequestHeaders.Add("x-xbl-contract-version", "2");
+            client.DefaultRequestHeaders.Add("Authorization", auth.AuthHeader);
+            client.DefaultRequestHeaders.Add("Accept-Language", "en-US");
 
-            // Logic to parse pageContent and determine subscription status
-            if (pageContent.Contains("Game Pass Ultimate", StringComparison.OrdinalIgnoreCase))
+            var response = await client.GetAsync(subscriptionCheckUrl);
+            var content = await response.Content.ReadAsStringAsync();
+
+            Log($"Scrape check performed on {subscriptionCheckUrl}. Length: {content.Length}");
+
+            // Re-implement the original successful scraping logic
+            if (content.Contains("Game Pass Ultimate", StringComparison.OrdinalIgnoreCase))
             {
                 return "Xbox Game Pass Ultimate";
             }
-            else if (pageContent.Contains("PC Game Pass", StringComparison.OrdinalIgnoreCase))
+            else if (content.Contains("PC Game Pass", StringComparison.OrdinalIgnoreCase))
             {
                 return "PC Game Pass";
             }
-            else if (pageContent.Contains("Xbox Game Pass for Console", StringComparison.OrdinalIgnoreCase))
+            else if (content.Contains("Xbox Game Pass for Console", StringComparison.OrdinalIgnoreCase))
             {
                 return "Xbox Game Pass for Console";
             }
-            else if (pageContent.Contains("Game Pass Core", StringComparison.OrdinalIgnoreCase) || 
-                     pageContent.Contains("Xbox Live Gold", StringComparison.OrdinalIgnoreCase))
+            else if (content.Contains("Game Pass Core", StringComparison.OrdinalIgnoreCase) || 
+                     content.Contains("Xbox Live Gold", StringComparison.OrdinalIgnoreCase))
             {
                 return "Xbox Game Pass Core";
             }
-            else if (pageContent.Contains("You're a member", StringComparison.OrdinalIgnoreCase))
+            else if (content.Contains("You're a member", StringComparison.OrdinalIgnoreCase))
             {
                 return "Active Subscription (Unknown Type)";
             }
-            else
-            {
-                return "None";
-            }
+            
+            // Fallback: If scraping failed, try the Profile JSON again
+            var profileUrl = $"https://profile.xboxlive.com/users/xuid({auth.Xuid})/profile/settings?settings=AccountTier,TenureLevel,SubscriptionTier";
+            var profileResponse = await client.GetAsync(profileUrl);
+            var profileJson = await profileResponse.Content.ReadAsStringAsync();
+            
+            if (profileJson.Contains("Ultimate", StringComparison.OrdinalIgnoreCase)) return "Xbox Game Pass Ultimate";
+            if (profileJson.Contains("PC", StringComparison.OrdinalIgnoreCase)) return "PC Game Pass";
+
+            return "None";
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[Error] Failed to check Xbox Game Pass subscription: {ex.Message}");
-            return "Error: Check Failed";
+            Log($"Failed to check Xbox Game Pass subscription: {ex.Message}");
+            return "Error";
         }
     }
 }
