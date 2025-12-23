@@ -46,6 +46,13 @@ namespace LegionDeck.GUI
         protected override void OnLaunched(LaunchActivatedEventArgs e)
         {
             Log("OnLaunched started");
+            
+            // Background update of library cache - start early
+            _ = Task.Run(async () => {
+                var updater = new LegionDeck.Core.Services.LibraryUpdateService();
+                await updater.UpdateAllAsync();
+            });
+
             window = new Window();
             window.Title = "LegionDeck";
             

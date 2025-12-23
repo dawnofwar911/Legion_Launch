@@ -57,6 +57,9 @@
                         <Border x:Name="EABadge" Background="Red" CornerRadius="4" Padding="8,4" Visibility="Collapsed">
                             <TextBlock Text="EA Play" Foreground="White" />
                         </Border>
+                        <Border x:Name="EAProBadge" Background="#FF8E0000" CornerRadius="4" Padding="8,4" Visibility="Collapsed">
+                            <TextBlock Text="EA Play Pro" Foreground="White" />
+                        </Border>
                         <Border x:Name="UbiBadge" Background="Blue" CornerRadius="4" Padding="8,4" Visibility="Collapsed">
                             <TextBlock Text="Ubisoft+" Foreground="White" />
                         </Border>

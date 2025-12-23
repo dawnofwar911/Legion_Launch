@@ -95,11 +95,12 @@ public sealed partial class GameDetailsPage : Page
 
             StoreButton.Visibility = Visibility.Visible;
             
-            SubscriptionPanel.Visibility = (wishlistVM.IsOnGamePass || wishlistVM.IsOnEaPlay || wishlistVM.IsOnUbisoftPlus) 
+            SubscriptionPanel.Visibility = (wishlistVM.IsOnGamePass || wishlistVM.IsOnEaPlay || wishlistVM.IsOnEaPlayPro || wishlistVM.IsOnUbisoftPlus) 
                 ? Visibility.Visible : Visibility.Collapsed;
             
             GPBadge.Visibility = wishlistVM.GamePassVisibility;
             EABadge.Visibility = wishlistVM.EaPlayVisibility;
+            EAProBadge.Visibility = wishlistVM.EaPlayProVisibility;
             UbiBadge.Visibility = wishlistVM.UbisoftPlusVisibility;
 
             GameDescription.Text = "This game is on your Steam Wishlist.";
@@ -202,7 +203,7 @@ public sealed partial class GameDetailsPage : Page
         {
             "steam" => Color.FromArgb(255, 23, 26, 33), // Steam Dark Blue/Grey
             "xbox" => Color.FromArgb(255, 16, 124, 16), // Xbox Green
-            "ea" => Color.FromArgb(255, 255, 71, 71),   // EA Red
+            string s when s.Contains("ea") => Color.FromArgb(255, 255, 71, 71),   // EA Red
             "ubisoft" => Color.FromArgb(255, 0, 112, 255), // Ubisoft Blue
             "epic" => Color.FromArgb(255, 51, 51, 51),    // Epic Grey
             _ => (Color)Resources["SystemAccentColor"]
@@ -218,12 +219,11 @@ public sealed partial class GameDetailsPage : Page
         }
     }
 
-    private void InstallButton_Click(object sender, RoutedEventArgs e)
+    private async void InstallButton_Click(object sender, RoutedEventArgs e)
     {
-        if (_gameViewModel is LibraryGameViewModel libraryVM && libraryVM.Source == "Steam")
+        if (_gameViewModel is LibraryGameViewModel libraryVM)
         {
-            var uri = $"steam://install/{libraryVM.GameData.Id}";
-            Process.Start(new ProcessStartInfo(uri) { UseShellExecute = true });
+            await _libraryService.LaunchGameAsync(libraryVM.GameData);
         }
     }
 

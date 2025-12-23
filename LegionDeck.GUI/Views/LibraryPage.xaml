@@ -10,6 +10,8 @@
 
     <Page.Resources>
         <models:SourceToColorConverter x:Key="SourceToColorConverter" />
+        <models:StatusTextConverter x:Key="StatusTextConverter" />
+        <models:StatusColorConverter x:Key="StatusColorConverter" />
     </Page.Resources>
 
     <Grid RowDefinitions="Auto,*" XYFocusKeyboardNavigation="Enabled">
@@ -88,7 +90,11 @@
                                 <TextBlock Text="{x:Bind Name, Mode=OneWay}" FontWeight="Bold" 
                                            TextWrapping="Wrap" MaxLines="2" Height="40"
                                            TextTrimming="CharacterEllipsis" FontSize="13" />
-                                <TextBlock Text="READY TO PLAY" Foreground="#FF2ECC71" FontWeight="ExtraBold" FontSize="11" Margin="0,0,0,4" />
+                                
+                                <TextBlock Text="{x:Bind IsInstalled, Mode=OneWay, Converter={StaticResource StatusTextConverter}}" 
+                                           Foreground="{x:Bind IsInstalled, Mode=OneWay, Converter={StaticResource StatusColorConverter}}" 
+                                           FontWeight="ExtraBold" FontSize="11" Margin="0,0,0,4" />
+                                
                                 <Grid>
                                     <Border Background="{x:Bind Source, Converter={StaticResource SourceToColorConverter}}" HorizontalAlignment="Left" CornerRadius="4" Padding="6,2" VerticalAlignment="Center">
                                         <TextBlock Text="{x:Bind Source}" FontSize="10" Foreground="White" FontWeight="Bold" />

@@ -39,6 +39,9 @@ public class Program
         [Option('e', "eaplay", Required = false, HelpText = "Check EA Play subscription status.")]
         public bool EaPlay { get; set; }
 
+        [Option("eapro", Required = false, HelpText = "Scrape and list full EA Play / Pro libraries.")]
+        public bool EaPro { get; set; }
+
         [Option('u', "ubisoftplus", Required = false, HelpText = "Check Ubisoft+ subscription status.")]
         public bool UbisoftPlus { get; set; }
     }
@@ -76,6 +79,7 @@ public class Program
                 services.AddTransient<XboxDataService>(); 
                 services.AddTransient<EaDataService>(); 
                 services.AddTransient<UbisoftDataService>();
+                services.AddTransient<SubscriptionLibraryService>();
                 services.AddSingleton<ConfigService>(); 
                 services.AddTransient<ItadApiService>(); 
             });
@@ -470,6 +474,22 @@ public class Program
             {
                 Console.WriteLine("No active Ubisoft+ subscription detected.");
             }
+        }
+        else if (opts.EaPro)
+        {
+            Console.WriteLine("Scraping EA Play / Pro libraries...");
+            var subService = services.GetRequiredService<SubscriptionLibraryService>();
+            
+            var standard = await subService.GetEaPlayStandardGamesAsync();
+            var pro = await subService.GetEaPlayProGamesAsync();
+
+            Console.WriteLine($"\nEA Play Standard ({standard.Count} titles):");
+            foreach (var g in standard.OrderBy(x => x.Name).Take(10)) Console.WriteLine($"  - {g.Name}");
+            if (standard.Count > 10) Console.WriteLine("  ...");
+
+            Console.WriteLine($"\nEA Play Pro ({pro.Count} titles):");
+            foreach (var g in pro.OrderBy(x => x.Name).Take(10)) Console.WriteLine($"  - {g.Name}");
+            if (pro.Count > 10) Console.WriteLine("  ...");
         }
         return 0;
     }

@@ -3,6 +3,7 @@ namespace LegionDeck.Core.Models;
 public class SteamWishlistItem
 {
     public int AppId { get; set; }
+    public string? SteamAppId { get; set; } // Generic ID field for Store/Handheld linking
     public string Name { get; set; } = string.Empty;
     public List<string> PlainIds { get; set; } = new List<string>();
     public string ImgCapsule { get; set; } = string.Empty;

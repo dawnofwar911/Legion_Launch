@@ -1,6 +1,7 @@
 using LegionDeck.Core.Services;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using System;
 
 namespace LegionDeck.GUI.Models;
 
@@ -22,11 +23,9 @@ public class LibraryGameViewModel : INotifyPropertyChanged
         }
     }
 
-    public string Source => GameData.Source;
-    
     private string _imgCapsule;
-    public string ImgCapsule 
-    { 
+    public string ImgCapsule
+    {
         get => _imgCapsule;
         set
         {
@@ -38,7 +37,10 @@ public class LibraryGameViewModel : INotifyPropertyChanged
         }
     }
 
-    private string _type = "game"; // Default to game, but for Steam we might check
+    public string Source => GameData.Source;
+    public bool IsInstalled => GameData.IsInstalled;
+
+    private string _type = "game"; 
     public string Type
     {
         get => _type;
@@ -61,7 +63,7 @@ public class LibraryGameViewModel : INotifyPropertyChanged
         if (game.Source == "Steam")
             _imgCapsule = $"https://cdn.cloudflare.steamstatic.com/steam/apps/{game.Id}/library_600x900_2x.jpg";
         else
-            _imgCapsule = "https://cdn.cloudflare.steamstatic.com/steam/apps/480/library_600x900_2x.jpg"; // Fallback to Spacewar or similar
+            _imgCapsule = "https://cdn.cloudflare.steamstatic.com/steam/apps/480/library_600x900_2x.jpg"; 
     }
 
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null)

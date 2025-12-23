@@ -20,6 +20,7 @@ public sealed partial class WishlistPage : Page
 {
     private ObservableCollection<SteamWishlistItemViewModel> Wishlist { get; } = new();
     private readonly SteamWishlistService _wishlistService = new();
+    private readonly SubscriptionLibraryService _subLibraryService = new();
     private readonly ItadApiService _itadService;
     private readonly SteamGridDbService _sgdbService;
     private readonly ConfigService _configService = new();
@@ -198,6 +199,12 @@ public sealed partial class WishlistPage : Page
             var ubiStatus = await _ubisoftData.GetUbisoftPlusSubscriptionDetailsAsync();
             bool hasUbi = ubiStatus.Contains("Ubisoft+");
 
+            // Fetch EA lists once per sync
+            var eaStandardList = await _subLibraryService.GetEaPlayStandardGamesAsync();
+            var eaProList = await _subLibraryService.GetEaPlayProGamesAsync();
+            var eaStandardNames = new HashSet<string>(eaStandardList.Select(g => g.Name.ToLower()));
+            var eaProNames = new HashSet<string>(eaProList.Select(g => g.Name.ToLower()));
+
             var semaphore = new SemaphoreSlim(5);
             var tasks = items.Select(async item =>
             {
@@ -255,12 +262,19 @@ public sealed partial class WishlistPage : Page
                             var subs = await _itadService.IsOnSubscriptionAsync(plains);
                             var allSubs = subs.Values.SelectMany(x => x).Distinct().ToList();
                             
+                            string lowerName = vm.Name?.ToLower() ?? "";
                             vm.IsOnGamePass = allSubs.Any(s => s.Contains("Game Pass"));
-                            vm.IsOnEaPlay = allSubs.Any(s => s.Contains("EA Play"));
+                            vm.IsOnEaPlay = allSubs.Any(s => s.Contains("EA Play")) || eaStandardNames.Contains(lowerName);
+                            // Only mark as Pro if it's in the Pro list AND NOT in the Standard list
+                            vm.IsOnEaPlayPro = eaProNames.Contains(lowerName) && !eaStandardNames.Contains(lowerName);
                             vm.IsOnUbisoftPlus = allSubs.Any(s => s.Contains("Ubisoft+"));
 
+                            bool hasEaPro = eaStatus.Contains("Pro");
+                            bool hasEaStandard = eaStatus.Contains("EA Play") && !hasEaPro;
+
                             vm.UserHasAccess = (vm.IsOnGamePass && hasGP) || 
-                                               (vm.IsOnEaPlay && hasEA) || 
+                                               (vm.IsOnEaPlay && (hasEA || hasGP)) || 
+                                               (vm.IsOnEaPlayPro && hasEaPro) ||
                                                (vm.IsOnUbisoftPlus && hasUbi);
                         }
                     }

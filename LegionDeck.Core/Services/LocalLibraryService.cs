@@ -24,30 +24,82 @@ public class LocalLibraryService
 
     public async Task LaunchGameAsync(InstalledGame game)
     {
+        Log($"LaunchGameAsync CALLED for {game.Name} (ID: {game.Id}, Source: {game.Source}, Installed: {game.IsInstalled})");
         string? uri = game.LaunchUri;
         
-        if (string.IsNullOrEmpty(uri))
+        // If not installed, trigger the INSTALL URI
+        if (!game.IsInstalled)
+        {
+            uri = game.Source.ToLower() switch
+            {
+                "steam" => $"steam://install/{game.Id}",
+                "xbox" => $"ms-windows-store://pdp/?ProductId={game.Id}",
+                "ubisoft" => $"uplay://launch/{game.Id}/0",
+                "ea" => BuildEaUri(game),
+                _ => null
+            };
+        }
+        else if (string.IsNullOrEmpty(uri))
         {
             uri = game.Source.ToLower() switch
             {
                 "steam" => $"steam://run/{game.Id}",
                 "ubisoft" => $"uplay://launch/{game.Id}/0",
                 "epic" => $"com.epicgames.launcher://apps/{game.Id}?action=launch&silent=true",
-                "ea" => $"origin://launchgame/{game.Id}",
+                "ea" => BuildEaUri(game),
                 _ => null
             };
         }
 
         if (!string.IsNullOrEmpty(uri))
         {
-            Log($"Attempting to launch {game.Name} ({game.Source}) via URI: {uri}");
-            Process.Start(new ProcessStartInfo(uri) { UseShellExecute = true });
+            try 
+            {
+                Log($"EA Launch Debug: ID={game.Id}, Name={game.Name}, IsInstalled={game.IsInstalled}, URI={uri}");
+                Log($"Attempting to {(game.IsInstalled ? "launch" : "install")} {game.Name} ({game.Source}) via URI: {uri}");
+                Process.Start(new ProcessStartInfo(uri) { UseShellExecute = true });
+            }
+            catch (Exception ex)
+            {
+                Log($"CRITICAL ERROR starting process for {game.Name}: {ex.Message}\n{ex.StackTrace}");
+            }
         }
         else
         {
-            Log($"Failed to launch {game.Name} ({game.Source}): No URI or path determined.");
+            Log($"Failed to handle {game.Name} ({game.Source}): No URI determined.");
         }
         await Task.CompletedTask;
+    }
+
+    private string? BuildEaUri(InstalledGame game)
+    {
+        if (string.IsNullOrEmpty(game.Id)) return "eadesktop://library/open";
+
+        // We always include both ID and Title to maximize chance of success.
+        // Some users report eadesktop://launch/ID or eadesktop://game/launch?offerIds=ID
+        return $"eadesktop://game/launch/?offerIds={game.Id}&title={Uri.EscapeDataString(game.Name)}";
+    }
+
+    public void UpdateInstallationStatus(List<InstalledGame> cloudGames, List<InstalledGame> localGames)
+    {
+        foreach (var cloudGame in cloudGames)
+        {
+            // Match by ID if possible, otherwise by name
+            var localMatch = localGames.FirstOrDefault(l => 
+                (l.Source == cloudGame.Source && l.Id == cloudGame.Id) || 
+                (l.Source == cloudGame.Source && l.Name.Equals(cloudGame.Name, StringComparison.OrdinalIgnoreCase)));
+
+            if (localMatch != null)
+            {
+                cloudGame.IsInstalled = true;
+                cloudGame.InstallPath = localMatch.InstallPath;
+                cloudGame.LaunchUri = localMatch.LaunchUri;
+            }
+            else
+            {
+                cloudGame.IsInstalled = false;
+            }
+        }
     }
 
     public async Task<List<InstalledGame>> GetInstalledGamesAsync()
@@ -222,7 +274,7 @@ public class LocalLibraryService
                                             Name = name,
                                             Source = "EA",
                                             InstallPath = installDir,
-                                            LaunchUri = $"origin://launchgame/{contentId}"
+                                            LaunchUri = $"origin2://game/launch/?offerIds={contentId}&title={Uri.EscapeDataString(name)}"
                                         });
                                     }
                                 }
@@ -467,10 +519,14 @@ public class LocalLibraryService
     {
         try
         {
-            var path = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LegionDeck", "startup.log");
-            var dir = Path.GetDirectoryName(path);
-            if (dir != null) Directory.CreateDirectory(dir);
-            File.AppendAllText(path, $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - [Core.LibraryService] {message}\n");
+            var logMessage = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - [Core.LibraryService] {message}";
+            Console.WriteLine(logMessage);
+            System.Diagnostics.Debug.WriteLine(logMessage);
+            
+            var logDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LegionDeck");
+            Directory.CreateDirectory(logDir);
+            var path = Path.Combine(logDir, "startup.log");
+            File.AppendAllText(path, logMessage + "\n");
         }
         catch { }
     }

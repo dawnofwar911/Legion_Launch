@@ -21,107 +21,143 @@ public class SubscriptionLibraryService
 
     public async Task<List<SteamWishlistItem>> GetXboxGamePassGamesAsync()
     {
-        var games = new List<SteamWishlistItem>();
-        var listId = "29a057a0-ed2d-46a7-aa4f-453629c74825"; // PC Game Pass
-        var catalogUrl = $"https://catalog.gamepass.com/sigls/v2?id={listId}&language=en-us&market=US";
-
-        try
-        {
-            var response = await _httpClient.GetStringAsync(catalogUrl);
-            using var doc = JsonDocument.Parse(response);
-            
-            var ids = new List<string>();
-            foreach (var item in doc.RootElement.EnumerateArray())
-            {
-                if (item.TryGetProperty("id", out var idProp))
-                {
-                    ids.Add(idProp.GetString()!);
-                }
-            }
-
-            for (int i = 0; i < ids.Count; i += 20)
-            {
-                var batchIds = ids.Skip(i).Take(20).ToList();
-                var idsParam = string.Join(",", batchIds);
-                var detailsUrl = $"https://displaycatalog.mp.microsoft.com/v7.0/products?bigIds={idsParam}&market=US&languages=en-us&MS-CV=DGU1mcuE00WOfm3m.1";
-
-                var detailsResponse = await _httpClient.GetStringAsync(detailsUrl);
-                using var detailsDoc = JsonDocument.Parse(detailsResponse);
-
-                if (detailsDoc.RootElement.TryGetProperty("Products", out var products))
-                {
-                    foreach (var product in products.EnumerateArray())
-                    {
-                        var localizedProperties = product.GetProperty("LocalizedProperties").EnumerateArray().First();
-                        var title = localizedProperties.GetProperty("ProductTitle").GetString()!;
-
-                        games.Add(new SteamWishlistItem
-                        {
-                            AppId = 0,
-                            Name = title
-                        });
-                    }
-                }
-            }
-        }
-        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Xbox Error: {ex.Message}"); } 
-        return games;
+        var xboxLibrary = new XboxLibraryService();
+        // Uses the user-verified 'All PC Games' SIGL ID for UK
+        return await xboxLibrary.GetCatalogByIdAsync("fdd9e2a7-0fee-49f6-ad69-4354098401ff");
     }
 
     public async Task<List<SteamWishlistItem>> GetEaPlayGamesAsync()
     {
-        var games = new List<SteamWishlistItem>();
-        // EA Play API (Publicly accessible search for subGroup)
-        var url = "https://api1.origin.com/xcloud/v1/search/pc?fq=subscriptionGroup:ea-play&facet=subscriptionGroup&sort=rank%20desc&start=0&rows=500";
+        // Default to scraping the web list for accuracy
+        return await GetEaPlayStandardGamesAsync();
+    }
 
+    public async Task<List<SteamWishlistItem>> GetEaPlayStandardGamesAsync()
+    {
+        return await ScrapeEaGamescriptionsAsync("ea_pc");
+    }
+
+    public async Task<List<SteamWishlistItem>> GetEaPlayProGamesAsync()
+    {
+        return await ScrapeEaGamescriptionsAsync("ea_pc_pro");
+    }
+
+    public class EaScrapedGame
+    {
+        public string Id { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+        public bool IsPro { get; set; }
+        public bool IsStandard { get; set; }
+    }
+
+    public async Task<List<EaScrapedGame>> GetAllEaGamesAsync()
+    {
+        var games = new List<EaScrapedGame>();
+        var url = "https://gamescriptions.com/subscription/platform/ea";
         try
         {
-            var response = await _httpClient.GetStringAsync(url);
-            using var doc = JsonDocument.Parse(response);
-
-            if (doc.RootElement.TryGetProperty("games", out var gamesRoot) && 
-                gamesRoot.TryGetProperty("game", out var gameList))
+            var html = await _httpClient.GetStringAsync(url);
+            
+            int pos = 0;
+            while ((pos = html.IndexOf("game_name", pos)) != -1)
             {
-                foreach (var game in gameList.EnumerateArray())
+                // Verify it's preceded by \" to ensure it's a key
+                if (pos < 2 || html[pos - 1] != '"' || html[pos - 2] != '\\') { pos++; continue; }
+
+                // find :
+                int colon = html.IndexOf(':', pos + 9);
+                if (colon == -1 || colon - pos > 15) { pos++; continue; }
+
+                // The value starts after the colon and leading \"
+                int startQuote = html.IndexOf('"', colon);
+                if (startQuote == -1 || startQuote - colon > 10) { pos++; continue; }
+
+                int titleStart = startQuote + 1;
+
+                // Find the ending \"
+                int titleEnd = -1;
+                int search = titleStart;
+                while ((search = html.IndexOf('"', search)) != -1)
                 {
-                    var title = game.GetProperty("gameName").GetString()!;
-                    games.Add(new SteamWishlistItem
+                    if (search > 0 && html[search - 1] == '\\')
                     {
-                        AppId = 0,
-                        Name = title
-                    });
+                        titleEnd = search - 1;
+                        break;
+                    }
+                    search++;
                 }
+
+                if (titleEnd == -1) break;
+
+                string name = html.Substring(titleStart, titleEnd - titleStart);
+
+                // Find game_id in the vicinity (it usually precedes game_name)
+                string id = name;
+                int idLabelPos = html.LastIndexOf("game_id", pos);
+                if (idLabelPos != -1 && pos - idLabelPos < 100)
+                {
+                    int idColon = html.IndexOf(':', idLabelPos);
+                    if (idColon != -1)
+                    {
+                        int idEnd = html.IndexOf(',', idColon);
+                        if (idEnd != -1)
+                        {
+                            id = html.Substring(idColon + 1, idEnd - idColon - 1).Trim();
+                        }
+                    }
+                }
+
+                // Look for services in the following block (up to next game)
+                int nextGame = html.IndexOf("game_id", titleEnd);
+                int snippetEnd = nextGame != -1 ? nextGame : html.Length;
+                snippetEnd = Math.Min(snippetEnd, titleEnd + 5000);
+                string snippet = html.Substring(titleEnd, snippetEnd - titleEnd);
+
+                bool isPro = snippet.Contains("ea_pc_pro");
+                bool isStandard = snippet.Contains("ea_pc\\\"") || snippet.Contains("ea_pc,") || (snippet.Contains("ea_pc") && !snippet.Contains("ea_pc_pro"));
+
+                if (isPro || isStandard)
+                {
+                    string cleanName = System.Text.RegularExpressions.Regex.Unescape(name);
+                    if (!games.Any(g => g.Name == cleanName))
+                    {
+                        games.Add(new EaScrapedGame { Id = id, Name = cleanName, IsPro = isPro, IsStandard = isStandard });
+                    }
+                }
+
+                pos = titleEnd + 1;
             }
         }
-        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"EA Error: {ex.Message}"); } 
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Error scraping EA games: {ex.Message}");
+        }
         return games;
+    }
+
+    private async Task<List<SteamWishlistItem>> ScrapeEaGamescriptionsAsync(string serviceKey)
+    {
+        var all = await GetAllEaGamesAsync();
+        if (serviceKey == "ea_pc_pro")
+            return all.Where(g => g.IsPro).Select(g => new SteamWishlistItem { Name = g.Name }).ToList();
+        else
+            return all.Where(g => g.IsStandard).Select(g => new SteamWishlistItem { Name = g.Name }).ToList();
     }
 
     public async Task<List<SteamWishlistItem>> GetUbisoftPlusGamesAsync()
     {
         var games = new List<SteamWishlistItem>();
-        // Scraping the Ubisoft+ games page
         var url = "https://store.ubisoft.com/uk/ubisoftplus/games";
-
         try
         {
-            // Note: This is a public page but might be rendered client-side.
-            // For now, we'll try a simple scrape. If it fails, we might need WebView2.
             var response = await _httpClient.GetStringAsync(url);
-            
-            // Extract game titles from HTML (Simple Regex approach)
-            // Example: data-game-title="GAME_NAME"
             var matches = Regex.Matches(response, "data-game-title=\"(.*?)\"");
             foreach (Match match in matches)
             {
                 var title = match.Groups[1].Value;
-                if (!games.Any(g => g.Name == title))
-                {
-                    games.Add(new SteamWishlistItem { AppId = 0, Name = title });
-                }
+                if (!games.Any(g => g.Name == title)) games.Add(new SteamWishlistItem { Name = title });
             }
-        }
-        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Ubisoft Error: {ex.Message}"); } 
+        } catch { }
         return games;
     }
 }

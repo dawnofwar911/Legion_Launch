@@ -72,6 +72,9 @@
                                     <Border Background="Red" CornerRadius="4" Padding="4,1" Visibility="{x:Bind EaPlayVisibility}">
                                         <TextBlock Text="EA" FontSize="9" Foreground="White" />
                                     </Border>
+                                    <Border Background="#FF8E0000" CornerRadius="4" Padding="4,1" Visibility="{x:Bind EaPlayProVisibility}">
+                                        <TextBlock Text="PRO" FontSize="9" Foreground="White" />
+                                    </Border>
                                     <Border Background="Blue" CornerRadius="4" Padding="4,1" Visibility="{x:Bind UbisoftPlusVisibility}">
                                         <TextBlock Text="U+" FontSize="9" Foreground="White" />
                                     </Border>

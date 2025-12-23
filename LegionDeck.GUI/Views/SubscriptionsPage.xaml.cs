@@ -58,6 +58,7 @@ public sealed partial class SubscriptionsPage : Page
 
         bool hasGP = xboxStatus.Contains("Ultimate") || xboxStatus.Contains("PC");
         bool hasEA = eaStatus.Contains("EA Play");
+        bool hasEaPro = eaStatus.Contains("Pro");
         bool hasUbi = ubiStatus.Contains("Ubisoft+");
 
         // 2. Load Cached Wishlist and Filter
@@ -73,7 +74,8 @@ public sealed partial class SubscriptionsPage : Page
                 {
                     var matches = cachedItems.Where(item => 
                         (item.IsOnGamePass && hasGP) ||
-                        (item.IsOnEaPlay && hasEA) ||
+                        (item.IsOnEaPlay && (hasEA || hasGP)) ||
+                        (item.IsOnEaPlayPro && hasEaPro) ||
                         (item.IsOnUbisoftPlus && hasUbi)
                     ).ToList();
 
