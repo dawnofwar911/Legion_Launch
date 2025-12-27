@@ -106,6 +106,23 @@ public sealed partial class LibraryPage : Page
     {
         // Reset the static flag to allow background update again
         LibraryUpdateService.ResetUpdateFlag();
+        
+        // Manually nuke the cache to force fresh data
+        try
+        {
+            var cacheDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LegionDeck", "Cache");
+            if (Directory.Exists(cacheDir))
+            {
+                var files = Directory.GetFiles(cacheDir, "*.json");
+                foreach (var file in files)
+                {
+                    // Don't delete wishlist_cache unless we want to, but for library refresh it's safer to clear EA/Steam/Xbox caches
+                    if (!file.Contains("wishlist")) File.Delete(file);
+                }
+            }
+        }
+        catch { }
+
         await RefreshLibraryAsync();
     }
 
