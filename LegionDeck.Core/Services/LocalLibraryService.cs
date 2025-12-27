@@ -77,29 +77,31 @@ public class LocalLibraryService
     {
         if (string.IsNullOrEmpty(game.Id)) return "origin2://library/open";
 
-        // Try origin2 for launch
         if (game.IsInstalled)
         {
              return $"origin2://game/launch/?offerIds={game.Id}&title={Uri.EscapeDataString(game.Name)}";
         }
         else 
         {
-            // For install, try constructing the deep link seen in logs
-            // https://pc.ea.com/en/games/SLUG?disableOnboarding=true&download&installSource=xboxwinapp
-            // We need to approximate the slug
-            string slug = game.Name.ToLower().Replace(" ", "-").Replace(":", "").Replace("'", "");
-            // eadesktop:// protocol can open these URLs
-            // return $"eadesktop://open/?url={Uri.EscapeDataString($"https://pc.ea.com/en/games/{slug}?disableOnboarding=true&download&installSource=xboxwinapp")}";
-            // Actually, let's try the simpler origin2 download command first, but if that fails, maybe we need the slug approach.
-            // But wait, the user said "click install on xbox app launches install window".
-            // The logs showed: Received external action - type[GameInstall], slug[dragon-age-the-veilguard]
+            // For uninstalled games (e.g. from subscription), the numeric ID from the scraper (e.g. 570) is useless to EA.
+            // We need to use the "slug" approach seen in EA App logs:
+            // https://pc.ea.com/en/games/dragon-age-the-veilguard?disableOnboarding=true&download&installSource=xboxwinapp&installGameSlug=dragon-age-the-veilguard&requestOwner=xboxwinapp
             
-            // Let's try origin2 download again but with the offerId AND title. 
-            // If that fails, we might need to reverse engineer how Xbox sends that "External Action".
-            // It might be a custom protocol handler or IPC.
+            // Generate slug: lowercase, replace spaces with dashes, remove special chars
+            // "Dragon Age: The Veilguard" -> "dragon-age-the-veilguard"
+            string slug = game.Name.ToLowerInvariant()
+                .Replace(" ", "-")
+                .Replace(":", "")
+                .Replace("'", "")
+                .Replace("™", "")
+                .Replace("®", "")
+                .Replace(".", "")
+                .Replace("!", "");
+
+            string deepLinkUrl = $"https://pc.ea.com/en/games/{slug}?disableOnboarding=true&download&installSource=xboxwinapp&installGameSlug={slug}&requestOwner=xboxwinapp";
             
-            // Re-attempting origin2 download with title as it might be required for the "lookup" if ID is numeric
-            return $"origin2://game/download?offerIds={game.Id}&title={Uri.EscapeDataString(game.Name)}";
+            // Use eadesktop:// protocol to force this URL to open inside the EA App
+            return $"eadesktop://open/?url={Uri.EscapeDataString(deepLinkUrl)}";
         }
     }
 
