@@ -64,9 +64,16 @@ public class SubscriptionLibraryService
                 // Verify it's preceded by \" to ensure it's a key
                 if (pos < 2 || html[pos - 1] != '"' || html[pos - 2] != '\\') { pos++; continue; }
 
+                // Verify it is exactly "game_name" and not "game_name_date"
+                // The key in JSON source is escaped: \"game_name\"
+                // pos is at 'g'. Length is 9.
+                // pos + 9 should be '\'
+                // pos + 10 should be '"'
+                if (html[pos + 9] != '\\' || html[pos + 10] != '"') { pos++; continue; }
+
                 // find :
                 int colon = html.IndexOf(':', pos + 9);
-                if (colon == -1 || colon - pos > 15) { pos++; continue; }
+                if (colon == -1 || colon - pos > 20) { pos++; continue; }
 
                 // The value starts after the colon and leading \"
                 int startQuote = html.IndexOf('"', colon);
@@ -74,10 +81,17 @@ public class SubscriptionLibraryService
 
                 int titleStart = startQuote + 1;
 
-                // Find the ending \" - Handle escaped quotes if necessary, but simpler is better for now
+                // Find the ending \"
+                // We need to find " that is preceded by \ because the content is JSON stringified inside the HTML
                 int titleEnd = html.IndexOf('"', titleStart);
-                while (titleEnd > 0 && html[titleEnd - 1] == '\\') 
+                while (titleEnd > 0) 
                 {
+                     // We want the quote that matches the opening \"
+                     if (html[titleEnd - 1] == '\\')
+                     {
+                         // Found a \" which likely ends the value
+                         break;
+                     }
                      titleEnd = html.IndexOf('"', titleEnd + 1);
                 }
 
