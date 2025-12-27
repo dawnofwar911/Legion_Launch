@@ -244,6 +244,10 @@ public sealed partial class LibraryPage : Page
         foreach (var game in gamesToScan)
         {
             if (ct.IsCancellationRequested) return;
+            
+            // Only attempt Steam store enrichment for Steam games or Xbox games (which might be mapped)
+            if (game.Source != "Steam" && game.Source != "Xbox") continue;
+
             var cachedCover = _metadataService.GetCover(game.GameData.Id);
             if (game.Type == "unknown" || game.Name.StartsWith("AppID ") || string.IsNullOrEmpty(cachedCover) || cachedCover.Contains("steamstatic.com"))
                 enrichQueue.Add((game.GameData.Id, game.Name, game.Source));
@@ -333,8 +337,12 @@ public sealed partial class LibraryPage : Page
     {
         InstalledGames.Clear();
         var filtered = string.IsNullOrWhiteSpace(filter) ? _allGames : _allGames.Where(g => g.Name.Contains(filter, StringComparison.OrdinalIgnoreCase));
+        Log($"ApplyFilter: filter='{filter}', input_count={_allGames.Count}, filtered_count={filtered.Count()}");
         foreach (var game in filtered)
         {
+            if (game.Name.Contains("Veilguard", StringComparison.OrdinalIgnoreCase))
+                Log($"[DEBUG] ApplyFilter processing Veilguard: Hidden={_metadataService.IsHidden(game.GameData.Id)}");
+
             if (_metadataService.IsHidden(game.GameData.Id)) continue;
             if (game.Source == "Steam")
             {

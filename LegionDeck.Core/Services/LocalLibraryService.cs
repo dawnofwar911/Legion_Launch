@@ -99,10 +99,9 @@ public class LocalLibraryService
                 .Replace(".", "")
                 .Replace("!", "");
 
-            // User prefers origin2:// protocol.
-            // Since specific deep links for unowned subscription games can be flaky or permission-locked,
-            // we default to opening the EA App library.
-            return "origin2://library/open";
+            // User reported "launch" gives "no access". 
+            // "download" often triggers the "Go to Game" or Store page for unowned/unclaimed subscription titles.
+            return $"origin2://game/download?offerIds={game.Id}";
         }
     }
 
