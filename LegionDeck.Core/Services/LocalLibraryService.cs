@@ -75,11 +75,10 @@ public class LocalLibraryService
 
     private string? BuildEaUri(InstalledGame game)
     {
-        if (string.IsNullOrEmpty(game.Id)) return "eadesktop://library/open";
+        if (string.IsNullOrEmpty(game.Id)) return "origin2://library/open";
 
-        // We always include both ID and Title to maximize chance of success.
-        // Some users report eadesktop://launch/ID or eadesktop://game/launch?offerIds=ID
-        return $"eadesktop://game/launch/?offerIds={game.Id}&title={Uri.EscapeDataString(game.Name)}";
+        string action = game.IsInstalled ? "launch" : "download";
+        return $"origin2://game/{action}/?offerIds={game.Id}&title={Uri.EscapeDataString(game.Name)}";
     }
 
     public void UpdateInstallationStatus(List<InstalledGame> cloudGames, List<InstalledGame> localGames)
