@@ -72,7 +72,7 @@ public class LibraryUpdateService
             
             var merged = allEa.Where(g => g.IsStandard).Select(i => new LocalLibraryService.InstalledGame 
             { 
-                Id = i.Id, Name = i.Name, Source = "EA Play", IsInstalled = false 
+                Id = i.Id, Name = i.Name, Source = "EA Play", IsInstalled = false, BackgroundImage = i.Image 
             }).ToList();
 
             foreach(var pg in allEa.Where(g => g.IsPro))
@@ -81,7 +81,7 @@ public class LibraryUpdateService
                 {
                     merged.Add(new LocalLibraryService.InstalledGame 
                     { 
-                        Id = pg.Id, Name = pg.Name, Source = "EA Play Pro", IsInstalled = false 
+                        Id = pg.Id, Name = pg.Name, Source = "EA Play Pro", IsInstalled = false, BackgroundImage = pg.Image
                     });
                 }
             }

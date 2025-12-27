@@ -46,6 +46,7 @@ public class SubscriptionLibraryService
     {
         public string Id { get; set; } = string.Empty;
         public string Name { get; set; } = string.Empty;
+        public string Image { get; set; } = string.Empty;
         public bool IsPro { get; set; }
         public bool IsStandard { get; set; }
     }
@@ -65,10 +66,6 @@ public class SubscriptionLibraryService
                 if (pos < 2 || html[pos - 1] != '"' || html[pos - 2] != '\\') { pos++; continue; }
 
                 // Verify it is exactly "game_name" and not "game_name_date"
-                // The key in JSON source is escaped: \"game_name\"
-                // pos is at 'g'. Length is 9.
-                // pos + 9 should be '\'
-                // pos + 10 should be '"'
                 if (html[pos + 9] != '\\' || html[pos + 10] != '"') { pos++; continue; }
 
                 // find :
@@ -82,27 +79,20 @@ public class SubscriptionLibraryService
                 int titleStart = startQuote + 1;
 
                 // Find the ending \"
-                // We need to find " that is preceded by \ because the content is JSON stringified inside the HTML
                 int titleEnd = html.IndexOf('"', titleStart);
                 while (titleEnd > 0) 
                 {
-                     // We want the quote that matches the opening \"
-                     if (html[titleEnd - 1] == '\\')
-                     {
-                         // Found a \" which likely ends the value
-                         break;
-                     }
+                     if (html[titleEnd - 1] == '\\') break;
                      titleEnd = html.IndexOf('"', titleEnd + 1);
                 }
 
                 if (titleEnd == -1) break;
 
                 string rawName = html.Substring(titleStart, titleEnd - titleStart);
-                // Unescape JSON string
                 string name = System.Text.RegularExpressions.Regex.Unescape(rawName);
 
-                // Find game_id in the vicinity (it usually precedes game_name)
-                string id = name; // Fallback
+                // Find game_id
+                string id = name;
                 int idLabelPos = html.LastIndexOf("game_id", pos);
                 if (idLabelPos != -1 && pos - idLabelPos < 100)
                 {
@@ -117,29 +107,49 @@ public class SubscriptionLibraryService
                     }
                 }
 
+                // Find game_image
+                string image = "";
+                int imgLabelPos = html.IndexOf("game_image", titleEnd);
+                if (imgLabelPos != -1 && imgLabelPos - titleEnd < 200)
+                {
+                    int imgColon = html.IndexOf(':', imgLabelPos);
+                    int imgStartQuote = html.IndexOf('"', imgColon);
+                    int imgEndQuote = html.IndexOf('"', imgStartQuote + 1);
+                    // loop for escaped quote ender
+                    while (imgEndQuote > 0) 
+                    {
+                         if (html[imgEndQuote - 1] == '\\') break;
+                         imgEndQuote = html.IndexOf('"', imgEndQuote + 1);
+                    }
+
+                    if (imgStartQuote != -1 && imgEndQuote != -1)
+                    {
+                        string rawImg = html.Substring(imgStartQuote + 1, imgEndQuote - imgStartQuote - 1);
+                        image = "https://images.gamescriptions.com/games/" + System.Text.RegularExpressions.Regex.Unescape(rawImg);
+                    }
+                }
+
                 // Look for services in the following block (up to next game)
                 int nextGame = html.IndexOf("game_id", titleEnd);
                 int snippetEnd = nextGame != -1 ? nextGame : html.Length;
-                // Limit snippet length to avoid scanning too far
                 int searchLimit = Math.Min(snippetEnd, titleEnd + 2000); 
                 string snippet = html.Substring(titleEnd, searchLimit - titleEnd);
 
                 bool isPro = snippet.Contains("ea_pc_pro");
-                // Check specifically for standard ea_pc string, avoiding partial matches like "ea_pc_pro"
                 bool isStandard = snippet.Contains("\"ea_pc\"") || snippet.Contains("\\\"ea_pc\\\"");
 
                 if (isPro || isStandard)
                 {
                     if (!games.Any(g => g.Name == name))
                     {
-                        games.Add(new EaScrapedGame { Id = id, Name = name, IsPro = isPro, IsStandard = isStandard });
+                        games.Add(new EaScrapedGame { Id = id, Name = name, Image = image, IsPro = isPro, IsStandard = isStandard });
                     }
                     else 
                     {
-                        // Update existing entry if new flags found
                         var existing = games.First(g => g.Name == name);
                         if (isPro) existing.IsPro = true;
                         if (isStandard) existing.IsStandard = true;
+                        if (string.IsNullOrEmpty(existing.Image)) existing.Image = image;
                     }
                 }
 

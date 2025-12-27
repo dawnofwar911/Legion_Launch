@@ -60,7 +60,12 @@ public class LibraryGameViewModel : INotifyPropertyChanged
     {
         GameData = game;
         _name = game.Name;
-        if (game.Source == "Steam")
+        
+        if (!string.IsNullOrEmpty(game.BackgroundImage))
+        {
+            _imgCapsule = game.BackgroundImage;
+        }
+        else if (game.Source == "Steam")
             _imgCapsule = $"https://cdn.cloudflare.steamstatic.com/steam/apps/{game.Id}/library_600x900_2x.jpg";
         else
             _imgCapsule = "https://cdn.cloudflare.steamstatic.com/steam/apps/480/library_600x900_2x.jpg"; 

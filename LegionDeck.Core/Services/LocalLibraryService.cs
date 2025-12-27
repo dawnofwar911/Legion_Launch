@@ -19,6 +19,7 @@ public class LocalLibraryService
         public string InstallPath { get; set; } = string.Empty;
         public string Source { get; set; } = string.Empty; // Steam, Xbox, Ubisoft
         public string? LaunchUri { get; set; }
+        public string? BackgroundImage { get; set; }
         public bool IsInstalled { get; set; } = true;
     }
 
