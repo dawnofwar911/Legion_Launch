@@ -33,9 +33,9 @@ public class LocalLibraryService
             uri = game.Source.ToLower() switch
             {
                 "steam" => $"steam://install/{game.Id}",
-                "xbox" => $"ms-windows-store://pdp/?ProductId={game.Id}",
+                "xbox" => $"msxbox://game/?productId={game.Id}",
                 "ubisoft" => $"uplay://launch/{game.Id}/0",
-                "ea" => BuildEaUri(game),
+                "ea" => $"origin://launchgame/{game.Id}", // Try classic origin link for install, sometimes works better than eadesktop
                 _ => null
             };
         }
