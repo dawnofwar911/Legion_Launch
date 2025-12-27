@@ -74,25 +74,21 @@ public class SubscriptionLibraryService
 
                 int titleStart = startQuote + 1;
 
-                // Find the ending \"
-                int titleEnd = -1;
-                int search = titleStart;
-                while ((search = html.IndexOf('"', search)) != -1)
+                // Find the ending \" - Handle escaped quotes if necessary, but simpler is better for now
+                int titleEnd = html.IndexOf('"', titleStart);
+                while (titleEnd > 0 && html[titleEnd - 1] == '\\') 
                 {
-                    if (search > 0 && html[search - 1] == '\\')
-                    {
-                        titleEnd = search - 1;
-                        break;
-                    }
-                    search++;
+                     titleEnd = html.IndexOf('"', titleEnd + 1);
                 }
 
                 if (titleEnd == -1) break;
 
-                string name = html.Substring(titleStart, titleEnd - titleStart);
+                string rawName = html.Substring(titleStart, titleEnd - titleStart);
+                // Unescape JSON string
+                string name = System.Text.RegularExpressions.Regex.Unescape(rawName);
 
                 // Find game_id in the vicinity (it usually precedes game_name)
-                string id = name;
+                string id = name; // Fallback
                 int idLabelPos = html.LastIndexOf("game_id", pos);
                 if (idLabelPos != -1 && pos - idLabelPos < 100)
                 {
@@ -110,18 +106,26 @@ public class SubscriptionLibraryService
                 // Look for services in the following block (up to next game)
                 int nextGame = html.IndexOf("game_id", titleEnd);
                 int snippetEnd = nextGame != -1 ? nextGame : html.Length;
-                snippetEnd = Math.Min(snippetEnd, titleEnd + 5000);
-                string snippet = html.Substring(titleEnd, snippetEnd - titleEnd);
+                // Limit snippet length to avoid scanning too far
+                int searchLimit = Math.Min(snippetEnd, titleEnd + 2000); 
+                string snippet = html.Substring(titleEnd, searchLimit - titleEnd);
 
                 bool isPro = snippet.Contains("ea_pc_pro");
-                bool isStandard = snippet.Contains("ea_pc\\\"") || snippet.Contains("ea_pc,") || (snippet.Contains("ea_pc") && !snippet.Contains("ea_pc_pro"));
+                // Check specifically for standard ea_pc string, avoiding partial matches like "ea_pc_pro"
+                bool isStandard = snippet.Contains("\"ea_pc\"") || snippet.Contains("\\\"ea_pc\\\"");
 
                 if (isPro || isStandard)
                 {
-                    string cleanName = System.Text.RegularExpressions.Regex.Unescape(name);
-                    if (!games.Any(g => g.Name == cleanName))
+                    if (!games.Any(g => g.Name == name))
                     {
-                        games.Add(new EaScrapedGame { Id = id, Name = cleanName, IsPro = isPro, IsStandard = isStandard });
+                        games.Add(new EaScrapedGame { Id = id, Name = name, IsPro = isPro, IsStandard = isStandard });
+                    }
+                    else 
+                    {
+                        // Update existing entry if new flags found
+                        var existing = games.First(g => g.Name == name);
+                        if (isPro) existing.IsPro = true;
+                        if (isStandard) existing.IsStandard = true;
                     }
                 }
 
