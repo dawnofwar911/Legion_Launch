@@ -35,7 +35,9 @@ public class LocalLibraryService
                 "steam" => $"steam://install/{game.Id}",
                 "xbox" => $"msxbox://game/?productId={game.Id}",
                 "ubisoft" => $"uplay://launch/{game.Id}/0",
-                "ea" => $"origin://launchgame/{game.Id}", // Try classic origin link for install, sometimes works better than eadesktop
+                "ea" => BuildEaUri(game), 
+                "ea play" => BuildEaUri(game),
+                "ea play pro" => BuildEaUri(game),
                 _ => null
             };
         }
