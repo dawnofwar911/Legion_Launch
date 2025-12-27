@@ -209,7 +209,11 @@ public sealed partial class LibraryPage : Page
                             this.DispatcherQueue.TryEnqueue(() => {
                                 if (_currentMode == mode && !currentCts.IsCancellationRequested) {
                                     _allGames.Clear();
+                                    Log($"Populating UI from fresh cache. Count: {freshList.Count}");
                                     foreach (var game in freshList) {
+                                        if (game.Name.Contains("Veilguard", StringComparison.OrdinalIgnoreCase))
+                                            Log($"[DEBUG] Adding Veilguard to UI List: {game.Name} (ID: {game.Id}, Img: {game.BackgroundImage})");
+                                        
                                         var vm = new LibraryGameViewModel(game);
                                         var cachedCover = _metadataService.GetCover(game.Id);
                                         if (!string.IsNullOrEmpty(cachedCover)) vm.ImgCapsule = cachedCover;

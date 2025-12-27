@@ -101,8 +101,9 @@ public class LocalLibraryService
 
             string deepLinkUrl = $"https://pc.ea.com/en/games/{slug}?disableOnboarding=true&download&installSource=xboxwinapp&installGameSlug={slug}&requestOwner=xboxwinapp";
             
-            // Use eadesktop:// protocol to force this URL to open inside the EA App
-            return $"eadesktop://open/?url={Uri.EscapeDataString(deepLinkUrl)}";
+            // eadesktop:// is not always registered. Fallback to opening the deep link in the browser, 
+            // which will handle the redirection to the installed app (EA App or Origin).
+            return deepLinkUrl;
         }
     }
 
