@@ -77,8 +77,30 @@ public class LocalLibraryService
     {
         if (string.IsNullOrEmpty(game.Id)) return "origin2://library/open";
 
-        string action = game.IsInstalled ? "launch" : "download";
-        return $"origin2://game/{action}/?offerIds={game.Id}&title={Uri.EscapeDataString(game.Name)}";
+        // Try origin2 for launch
+        if (game.IsInstalled)
+        {
+             return $"origin2://game/launch/?offerIds={game.Id}&title={Uri.EscapeDataString(game.Name)}";
+        }
+        else 
+        {
+            // For install, try constructing the deep link seen in logs
+            // https://pc.ea.com/en/games/SLUG?disableOnboarding=true&download&installSource=xboxwinapp
+            // We need to approximate the slug
+            string slug = game.Name.ToLower().Replace(" ", "-").Replace(":", "").Replace("'", "");
+            // eadesktop:// protocol can open these URLs
+            // return $"eadesktop://open/?url={Uri.EscapeDataString($"https://pc.ea.com/en/games/{slug}?disableOnboarding=true&download&installSource=xboxwinapp")}";
+            // Actually, let's try the simpler origin2 download command first, but if that fails, maybe we need the slug approach.
+            // But wait, the user said "click install on xbox app launches install window".
+            // The logs showed: Received external action - type[GameInstall], slug[dragon-age-the-veilguard]
+            
+            // Let's try origin2 download again but with the offerId AND title. 
+            // If that fails, we might need to reverse engineer how Xbox sends that "External Action".
+            // It might be a custom protocol handler or IPC.
+            
+            // Re-attempting origin2 download with title as it might be required for the "lookup" if ID is numeric
+            return $"origin2://game/download?offerIds={game.Id}&title={Uri.EscapeDataString(game.Name)}";
+        }
     }
 
     public void UpdateInstallationStatus(List<InstalledGame> cloudGames, List<InstalledGame> localGames)
