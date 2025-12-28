@@ -134,7 +134,9 @@ public sealed partial class SettingsPage : Page
             var result = await eaAuth.LoginAsync();
             if (result == "EALoggedIn")
             {
-                ShowInfoBar("EA", "Successfully authenticated with EA.", InfoBarSeverity.Success);
+                // Reset flag to force fresh authenticated data on next scan
+                LibraryUpdateService.ResetUpdateFlag();
+                ShowInfoBar("EA", "Successfully authenticated with EA. You can now refresh your library.", InfoBarSeverity.Success);
             }
         }
         catch (Exception ex)

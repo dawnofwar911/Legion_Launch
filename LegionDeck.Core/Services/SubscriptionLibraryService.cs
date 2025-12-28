@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Net.Http;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -142,6 +143,9 @@ public class SubscriptionLibraryService
                 {
                     if (!games.Any(g => g.Name == name))
                     {
+                        System.Diagnostics.Debug.WriteLine($"[EA Scraper] Found game: {name} (ID: {id}, Pro: {isPro}, Std: {isStandard})");
+                        // Also log to file for user
+                        LogToStartup($"Scraped EA game: {name} (ID: {id})");
                         games.Add(new EaScrapedGame { Id = id, Name = name, Image = image, IsPro = isPro, IsStandard = isStandard });
                     }
                     else 
@@ -161,6 +165,16 @@ public class SubscriptionLibraryService
             System.Diagnostics.Debug.WriteLine($"Error scraping EA games: {ex.Message}");
         }
         return games;
+    }
+
+    private void LogToStartup(string message)
+    {
+        try
+        {
+            var path = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LegionDeck", "startup.log");
+            File.AppendAllText(path, $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - [SubscriptionLibraryService] {message}\n");
+        }
+        catch { }
     }
 
     private async Task<List<SteamWishlistItem>> ScrapeEaGamescriptionsAsync(string serviceKey)

@@ -24,31 +24,75 @@ public class EaAuthService : IAuthService
         catch { }
     }
 
-    public Task<string?> LoginAsync()
+    public async Task<string?> LoginAsync()
     {
         var tcs = new TaskCompletionSource<string?>();
-
+        
         var thread = new Thread(() =>
         {
-            try
+            var window = new EaLoginForm();
+            window.Show();
+            
+            // Wait for completion signal or window close
+            window.Closed += (s, e) => tcs.TrySetResult("WindowClosed");
+            
+            // We can listen to our own TCS to close the window programmatically if needed
+            _ = tcs.Task.ContinueWith(t => 
             {
-                Application.SetHighDpiMode(HighDpiMode.SystemAware);
-                Application.EnableVisualStyles();
-                Application.SetCompatibleTextRenderingDefault(false);
+                if (t.IsCompleted && !window.IsDisposed) 
+                    window.Invoke(new Action(window.Close));
+            });
 
-                var form = new EaLoginForm(tcs);
-                Application.Run(form);
-            }
-            catch (Exception ex)
-            {
-                tcs.TrySetException(ex);
-            }
+            System.Windows.Forms.Application.Run(window);
         });
 
         thread.SetApartmentState(ApartmentState.STA);
         thread.Start();
 
-        return tcs.Task;
+        return await tcs.Task;
+    }
+
+    public async Task<bool> RefreshTokenAsync()
+    {
+        var tcs = new TaskCompletionSource<bool>();
+        var thread = new Thread(() =>
+        {
+            try
+            {
+                var window = new EaLoginForm(isSilent: true); // Overload for silent mode
+                
+                // Set a timeout
+                var timer = new System.Windows.Forms.Timer { Interval = 15000 };
+                timer.Tick += (s, e) => { 
+                    timer.Stop();
+                    if (!window.IsDisposed) window.Invoke(new Action(window.Close)); 
+                    tcs.TrySetResult(false); 
+                };
+                timer.Start();
+
+                // Watch for token file update
+                var watcher = new FileSystemWatcher(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LegionDeck", "AuthTokens"), "ea_token.txt");
+                watcher.NotifyFilter = NotifyFilters.LastWrite;
+                watcher.Changed += (s, e) => 
+                { 
+                    if (!window.IsDisposed) window.Invoke(new Action(window.Close)); 
+                    tcs.TrySetResult(true); 
+                };
+                watcher.EnableRaisingEvents = true;
+
+                // Ensure the watcher doesn't block the thread or get GC'd
+                window.FormClosed += (s, e) => { watcher.Dispose(); timer.Dispose(); };
+
+                window.Show(); // Ideally minimal/hidden
+                System.Windows.Forms.Application.Run(window);
+            }
+            catch { tcs.TrySetResult(false); }
+        });
+
+        thread.SetApartmentState(ApartmentState.STA);
+        thread.Start();
+
+        return await tcs.Task;
     }
 }
 
@@ -56,14 +100,24 @@ public class EaLoginForm : Form
 {
     private readonly TaskCompletionSource<string?> _tcs;
     private WebView2 _webView;
+    private readonly bool _isSilent;
 
-    public EaLoginForm(TaskCompletionSource<string?> tcs)
+    public EaLoginForm(TaskCompletionSource<string?> tcs = null, bool isSilent = false)
     {
-        _tcs = tcs;
+        _tcs = tcs ?? new TaskCompletionSource<string?>();
+        _isSilent = isSilent;
+        
         this.Text = "EA Login - LegionDeck";
         this.Width = 1024;
         this.Height = 768;
         this.StartPosition = FormStartPosition.CenterScreen;
+
+        if (_isSilent)
+        {
+            this.ShowInTaskbar = false;
+            this.WindowState = FormWindowState.Minimized;
+            this.Opacity = 0;
+        }
 
         _webView = new WebView2();
         _webView.Dock = DockStyle.Fill;
@@ -84,12 +138,32 @@ public class EaLoginForm : Form
             // Set a consistent User-Agent
             _webView.CoreWebView2.Settings.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
+            // Attach the token catcher immediately
+            _webView.CoreWebView2.WebResourceResponseReceived += (s, args) => {
+                if (args.Request.Uri.StartsWith("https://service-aggregation-layer.juno.ea.com/graphql"))
+                {
+                    var headers = args.Request.Headers;
+                    if (headers.Contains("Authorization"))
+                    {
+                        var authHeader = headers.GetHeader("Authorization");
+                        if (!string.IsNullOrEmpty(authHeader) && authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+                        {
+                            var token = authHeader.Substring(7);
+                            var authTokensPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LegionDeck", "AuthTokens");
+                            Directory.CreateDirectory(authTokensPath);
+                            File.WriteAllText(Path.Combine(authTokensPath, "ea_token.txt"), token);
+                            Console.WriteLine("[Auth Success] Nabbed Juno Bearer Token.");
+                        }
+                    }
+                }
+            };
+
             // Handle new window requests
             _webView.CoreWebView2.NewWindowRequested += CoreWebView2_NewWindowRequested;
             _webView.SourceChanged += WebView_SourceChanged;
 
-            // Navigate to EA Login - Let the site handle the redirect and client_id
-            _webView.Source = new Uri("https://www.ea.com/login");
+            // Navigate to EA Deals - This page heavily uses Juno API calls
+            _webView.Source = new Uri("https://www.ea.com/sales/deals");
             
             _webView.NavigationCompleted += WebView_NavigationCompleted;
         }
@@ -126,8 +200,6 @@ public class EaLoginForm : Form
             var cookieManager = _webView.CoreWebView2.CookieManager;
             var currentUrl = _webView.Source.ToString();
             
-            Console.WriteLine($"[Debug] Checking URL: {currentUrl}");
-
             // Basic check: if we are redirected back to ea.com and have a 'remid' or 'sid', we are likely logged in.
             if (currentUrl.Contains("ea.com", StringComparison.OrdinalIgnoreCase) && !currentUrl.Contains("connect/auth"))
             {
@@ -139,19 +211,11 @@ public class EaLoginForm : Form
                                                .Select(g => g.First())
                                                .ToList();
 
-                if (allCookies.Any())
-                {
-                     Console.WriteLine("[Debug] Cookies found:");
-                     foreach (var c in allCookies)
-                     {
-                        Console.WriteLine($"  - {c.Name} ({c.Domain})");
-                     }
-                }
-
-                // 'PLAY_SESSION' is a common indicator of an active EA session on www.ea.com
+                // 'PLAY_SESSION' or 'sid' are common indicators
                 var playSession = allCookies.FirstOrDefault(c => c.Name.Equals("PLAY_SESSION", StringComparison.OrdinalIgnoreCase));
+                var sid = allCookies.FirstOrDefault(c => c.Name.Equals("sid", StringComparison.OrdinalIgnoreCase));
 
-                if (playSession != null)
+                if (playSession != null || sid != null)
                 {
                     Console.WriteLine($"[Auth Success] Retrieved EA session cookies.");
                     
@@ -165,8 +229,7 @@ public class EaLoginForm : Form
                     var authTokensPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LegionDeck", "AuthTokens");
                     Directory.CreateDirectory(authTokensPath);
                     await File.WriteAllTextAsync(Path.Combine(authTokensPath, "ea_cookies.json"), json);
-                    Console.WriteLine($"EA cookies saved to: {Path.Combine(authTokensPath, "ea_cookies.json")}");
-
+                    
                     _tcs.TrySetResult("EALoggedIn");
                     this.Close();
                 }

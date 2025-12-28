@@ -8,45 +8,47 @@
     mc:Ignorable="d"
     Loaded="SettingsPage_Loaded">
 
-    <Grid Padding="24" XYFocusKeyboardNavigation="Enabled" PreviewKeyDown="Settings_PreviewKeyDown" GettingFocus="Grid_GettingFocus" IsTabStop="False">
-        <StackPanel Spacing="20">
-            <TextBlock Text="Settings" Style="{ThemeResource TitleTextBlockStyle}" />
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <Grid Padding="24" XYFocusKeyboardNavigation="Enabled" PreviewKeyDown="Settings_PreviewKeyDown" GettingFocus="Grid_GettingFocus" IsTabStop="False">
+            <StackPanel Spacing="20">
+                <TextBlock Text="Settings" Style="{ThemeResource TitleTextBlockStyle}" />
 
-            <InfoBar x:Name="FeedbackInfoBar" IsOpen="False" Margin="0,0,0,10" />
+                <InfoBar x:Name="FeedbackInfoBar" IsOpen="False" Margin="0,0,0,10" />
 
-            <StackPanel Spacing="8">
-                <TextBlock Text="IsThereAnyDeal (ITAD) API Key" Style="{ThemeResource BodyStrongTextBlockStyle}" />
-                <PasswordBox x:Name="ItadKeyBox" PlaceholderText="Enter ITAD Key" Width="400" HorizontalAlignment="Left" PasswordRevealMode="Hidden" UseSystemFocusVisuals="True" />
+                <StackPanel Spacing="8">
+                    <TextBlock Text="IsThereAnyDeal (ITAD) API Key" Style="{ThemeResource BodyStrongTextBlockStyle}" />
+                    <PasswordBox x:Name="ItadKeyBox" PlaceholderText="Enter ITAD Key" Width="400" HorizontalAlignment="Left" PasswordRevealMode="Hidden" UseSystemFocusVisuals="True" />
+                </StackPanel>
+
+                <StackPanel Spacing="8">
+                    <TextBlock Text="SteamGridDB (SGDB) API Key" Style="{ThemeResource BodyStrongTextBlockStyle}" />
+                    <PasswordBox x:Name="SgdbKeyBox" PlaceholderText="Enter SGDB Key" Width="400" HorizontalAlignment="Left" PasswordRevealMode="Hidden" UseSystemFocusVisuals="True" />
+                </StackPanel>
+
+                <StackPanel Spacing="8">
+                    <TextBlock Text="Steam Web API Key (Optional but Recommended)" Style="{ThemeResource BodyStrongTextBlockStyle}" />
+                    <PasswordBox x:Name="SteamApiKeyBox" PlaceholderText="Enter Steam API Key (bypasses privacy settings)" Width="400" HorizontalAlignment="Left" PasswordRevealMode="Peek" UseSystemFocusVisuals="True" />
+                </StackPanel>
+
+                <StackPanel Spacing="8">
+                    <TextBlock Text="IGDB Client ID" Style="{ThemeResource BodyStrongTextBlockStyle}" />
+                    <TextBox x:Name="IgdbClientIdBox" PlaceholderText="Enter IGDB Client ID" Width="400" HorizontalAlignment="Left" UseSystemFocusVisuals="True" />
+                </StackPanel>
+
+                <StackPanel Spacing="8">
+                    <TextBlock Text="IGDB Client Secret" Style="{ThemeResource BodyStrongTextBlockStyle}" />
+                    <PasswordBox x:Name="IgdbClientSecretBox" PlaceholderText="Enter IGDB Client Secret" Width="400" HorizontalAlignment="Left" PasswordRevealMode="Hidden" UseSystemFocusVisuals="True" />
+                    <Button Content="Save Keys" Click="SaveSettings_Click" Margin="0,10,0,0" UseSystemFocusVisuals="True" />
+                </StackPanel>
+
+                <StackPanel Spacing="12">
+                    <TextBlock Text="Authentication" Style="{ThemeResource BodyStrongTextBlockStyle}" Margin="0,10,0,0" />
+                    <Button Content="Login to Steam" Click="SteamLogin_Click" Width="200" UseSystemFocusVisuals="True" />
+                    <Button Content="Login to Xbox" Click="XboxLogin_Click" Width="200" UseSystemFocusVisuals="True" />
+                    <Button Content="Login to Ubisoft+" Click="UbisoftLogin_Click" Width="200" UseSystemFocusVisuals="True" />
+                    <Button Content="Login to EA" Click="EALogin_Click" Width="200" UseSystemFocusVisuals="True" />
+                </StackPanel>
             </StackPanel>
-
-            <StackPanel Spacing="8">
-                <TextBlock Text="SteamGridDB (SGDB) API Key" Style="{ThemeResource BodyStrongTextBlockStyle}" />
-                <PasswordBox x:Name="SgdbKeyBox" PlaceholderText="Enter SGDB Key" Width="400" HorizontalAlignment="Left" PasswordRevealMode="Hidden" UseSystemFocusVisuals="True" />
-            </StackPanel>
-
-            <StackPanel Spacing="8">
-                <TextBlock Text="Steam Web API Key (Optional but Recommended)" Style="{ThemeResource BodyStrongTextBlockStyle}" />
-                <PasswordBox x:Name="SteamApiKeyBox" PlaceholderText="Enter Steam API Key (bypasses privacy settings)" Width="400" HorizontalAlignment="Left" PasswordRevealMode="Peek" UseSystemFocusVisuals="True" />
-            </StackPanel>
-
-            <StackPanel Spacing="8">
-                <TextBlock Text="IGDB Client ID" Style="{ThemeResource BodyStrongTextBlockStyle}" />
-                <TextBox x:Name="IgdbClientIdBox" PlaceholderText="Enter IGDB Client ID" Width="400" HorizontalAlignment="Left" UseSystemFocusVisuals="True" />
-            </StackPanel>
-
-            <StackPanel Spacing="8">
-                <TextBlock Text="IGDB Client Secret" Style="{ThemeResource BodyStrongTextBlockStyle}" />
-                <PasswordBox x:Name="IgdbClientSecretBox" PlaceholderText="Enter IGDB Client Secret" Width="400" HorizontalAlignment="Left" PasswordRevealMode="Hidden" UseSystemFocusVisuals="True" />
-                <Button Content="Save Keys" Click="SaveSettings_Click" Margin="0,10,0,0" UseSystemFocusVisuals="True" />
-            </StackPanel>
-
-            <StackPanel Spacing="12">
-                <TextBlock Text="Authentication" Style="{ThemeResource BodyStrongTextBlockStyle}" Margin="0,10,0,0" />
-                <Button Content="Login to Steam" Click="SteamLogin_Click" Width="200" UseSystemFocusVisuals="True" />
-                <Button Content="Login to Xbox" Click="XboxLogin_Click" Width="200" UseSystemFocusVisuals="True" />
-                <Button Content="Login to Ubisoft+" Click="UbisoftLogin_Click" Width="200" UseSystemFocusVisuals="True" />
-                <Button Content="Login to EA" Click="EALogin_Click" Width="200" UseSystemFocusVisuals="True" />
-            </StackPanel>
-        </StackPanel>
-    </Grid>
+        </Grid>
+    </ScrollViewer>
 </Page>
