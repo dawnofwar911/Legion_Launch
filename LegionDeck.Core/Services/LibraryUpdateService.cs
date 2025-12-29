@@ -123,14 +123,18 @@ public class LibraryUpdateService
                     var gameSlug = g.Name.ToLowerInvariant()
                         .Replace(" ", "-").Replace(":", "").Replace("'", "").Replace("™", "").Replace("®", "");
                     
-                    // 1. Exact Name Match
-                    if (g.Name.Equals(resolved.DisplayName, StringComparison.OrdinalIgnoreCase)) return true;
+                    // 1. Exact Name Match (normalized)
+                    var normName = g.Name.Replace("â„¢", "").Replace("Â®", "").Trim();
+                    var normResolved = resolved.DisplayName.Replace("â„¢", "").Replace("Â®", "").Trim();
                     
-                    // 2. Slug Match (contains)
-                    if (gameSlug.Contains(vaultSlug) || vaultSlug.Contains(gameSlug)) return true;
+                    if (normName.Equals(normResolved, StringComparison.OrdinalIgnoreCase)) return true;
+                    
+                    // 2. Strict Slug Match (must be a substantial portion or exact)
+                    if (gameSlug.Length > 5 && (gameSlug == vaultSlug)) return true;
 
-                    // 3. Special handling for "Pro Edition" suffixes
-                    if (resolved.DisplayName.Contains(g.Name) && resolved.DisplayName.Contains("Pro Edition")) return true;
+                    // 3. Special handling for "Pro Edition" suffixes - must contain the full base name
+                    if (resolved.DisplayName.Contains(g.Name, StringComparison.OrdinalIgnoreCase) && 
+                        (resolved.DisplayName.Contains("Pro Edition") || resolved.DisplayName.Contains("Deluxe Edition"))) return true;
 
                     return false;
                 });
