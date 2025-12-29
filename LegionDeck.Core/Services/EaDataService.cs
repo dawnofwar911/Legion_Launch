@@ -38,30 +38,29 @@ public class EaDataService
             var token = await GetAuthTokenAsync();
             if (string.IsNullOrEmpty(token)) return results;
     
-            string? nextCursor = "0"; 
-            int limit = 100; // Standard batch size
-    
-            do
-            {
-                var variables = new
-                {
-                    isMac = false,
-                    addFieldsToPreloadGames = true,
-                    locale = "en",
-                    limit = limit,
-                    next = nextCursor,
-                    type = new[] { "DIGITAL_FULL_GAME", "PACKAGED_FULL_GAME" },
-                    entitlementEnabled = true,
-                    storefronts = new[] { "EA", "STEAM", "EPIC" },
-                    ownershipMethods = new[]
+                    string? nextCursor = "0"; 
+                    int limit = 500; 
+            
+                    do
                     {
-                        "UNKNOWN", "ASSOCIATION", "PURCHASE", "REDEMPTION", "GIFT_RECEIPT", "ENTITLEMENT_GRANT", 
-                        "DIRECT_ENTITLEMENT", "PRE_ORDER_PURCHASE", "VAULT", "XGP_VAULT", "STEAM", "STEAM_VAULT", 
-                        "STEAM_SUBSCRIPTION", "EPIC", "EPIC_VAULT", "EPIC_SUBSCRIPTION"
-                    },
-                    platforms = new[] { "PC" }
-                };
-    
+                        var variables = new
+                        {
+                            isMac = false,
+                            addFieldsToPreloadGames = true,
+                            locale = "en",
+                            limit = limit,
+                            next = nextCursor,
+                            type = new[] { "DIGITAL_FULL_GAME", "PACKAGED_FULL_GAME", "BUNDLE" },
+                            entitlementEnabled = true,
+                            storefronts = new[] { "EA", "STEAM", "EPIC" },
+                            ownershipMethods = new[]
+                            {
+                                "UNKNOWN", "ASSOCIATION", "PURCHASE", "REDEMPTION", "GIFT_RECEIPT", "ENTITLEMENT_GRANT", 
+                                "DIRECT_ENTITLEMENT", "PRE_ORDER_PURCHASE", "VAULT", "XGP_VAULT", "STEAM", "STEAM_VAULT", 
+                                "STEAM_SUBSCRIPTION", "EPIC", "EPIC_VAULT", "EPIC_SUBSCRIPTION", "PSN_SUBSCRIPTION", "XBL_SUBSCRIPTION", "XGP_SUBSCRIPTION"
+                            },
+                            platforms = new[] { "PC" }
+                        };    
                 var variablesJson = JsonSerializer.Serialize(variables);
                 var extensionsJson = JsonSerializer.Serialize(new 
                 {
