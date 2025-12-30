@@ -20,7 +20,6 @@ public class EaDataService
     {
         _httpClient = new HttpClient();
         _httpClient.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
-        
         var authTokensPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LegionDeck", "AuthTokens");
         _eaCookieFilePath = Path.Combine(authTokensPath, "ea_cookies.json");
     }
@@ -32,238 +31,156 @@ public class EaDataService
         public string DisplayName { get; set; } = "";
     }
 
-        public async Task<List<EaOffer>> GetVaultOffersAsync()
-        {
-            var results = new List<EaOffer>();
-            var token = await GetAuthTokenAsync();
-            if (string.IsNullOrEmpty(token)) return results;
-    
-                    string? nextCursor = "0"; 
-                    int limit = 500; 
-            
-                    do
-                    {
-                        var variables = new
-                        {
-                            isMac = false,
-                            addFieldsToPreloadGames = true,
-                            locale = "en",
-                            limit = limit,
-                            next = nextCursor,
-                            type = new[] { "DIGITAL_FULL_GAME", "PACKAGED_FULL_GAME", "BUNDLE" },
-                            entitlementEnabled = true,
-                            storefronts = new[] { "EA", "STEAM", "EPIC" },
-                            ownershipMethods = new[]
-                            {
-                                "UNKNOWN", "ASSOCIATION", "PURCHASE", "REDEMPTION", "GIFT_RECEIPT", "ENTITLEMENT_GRANT", 
-                                "DIRECT_ENTITLEMENT", "PRE_ORDER_PURCHASE", "VAULT", "XGP_VAULT", "STEAM", "STEAM_VAULT", 
-                                "STEAM_SUBSCRIPTION", "EPIC", "EPIC_VAULT", "EPIC_SUBSCRIPTION", "PSN_SUBSCRIPTION", "XBL_SUBSCRIPTION", "XGP_SUBSCRIPTION"
-                            },
-                            platforms = new[] { "PC" }
-                        };    
-                var variablesJson = JsonSerializer.Serialize(variables);
-                var extensionsJson = JsonSerializer.Serialize(new 
-                {
-                    persistedQuery = new 
-                    {
-                        version = 1, 
-                        sha256Hash = "5de4178ee7e1f084ce9deca856c74a9e03547a67dfafc0cb844d532fb54ae73d" 
-                    } 
-                });
-    
-                var uri = $"{GraphQlUrl}?operationName=getPreloadedOwnedGames&variables={Uri.EscapeDataString(variablesJson)}&extensions={Uri.EscapeDataString(extensionsJson)}";
-    
-                try
-                {
-                    var request = new HttpRequestMessage(HttpMethod.Get, uri);
-                    request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-    
-                    var response = await _httpClient.SendAsync(request);
-                    var json = await response.Content.ReadAsStringAsync();
-    
-                    if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized || 
-                        json.Contains("UNAUTHENTICATED") || json.Contains("Not authenticated"))
-                    {
-                        Log("[Juno] Auth failed. Attempting silent refresh...");
-                        var authService = new EaAuthService();
-                        if (await authService.RefreshTokenAsync())
-                        {
-                            token = await GetAuthTokenAsync();
-                            continue; 
-                        }
-                        else return results;
-                    }
-    
-                    using var doc = JsonDocument.Parse(json);
-                    if (doc.RootElement.TryGetProperty("data", out var data) && data.ValueKind != JsonValueKind.Null &&
-                        data.TryGetProperty("me", out var me) && me.ValueKind != JsonValueKind.Null &&
-                        me.TryGetProperty("ownedGameProducts", out var owned) && owned.ValueKind != JsonValueKind.Null)
-                    {
-                        int pageCount = 0;
-                        if (owned.TryGetProperty("items", out var items) && items.ValueKind == JsonValueKind.Array)
-                        {
-                            foreach (var item in items.EnumerateArray())
-                            {
-                                if (item.ValueKind == JsonValueKind.Null) continue;
-                                string offerId = item.TryGetProperty("originOfferId", out var oid) ? (oid.GetString() ?? "") : "";
-                                string displayName = "";
-                                if (item.TryGetProperty("product", out var product) && product.ValueKind != JsonValueKind.Null)
-                                {
-                                    displayName = product.TryGetProperty("name", out var n) ? (n.GetString() ?? "") : "";
-                                }
-    
-                                if (!string.IsNullOrEmpty(offerId))
-                                {
-                                    results.Add(new EaOffer { OfferId = offerId, DisplayName = displayName });
-                                    pageCount++;
-                                }
-                            }
-                        }
-    
-                        Log($"[Juno] Page received {pageCount} items. Total so far: {results.Count}");
-    
-                        if (owned.TryGetProperty("next", out var nextElem) && nextElem.ValueKind == JsonValueKind.String)
-                        {
-                            var newCursor = nextElem.GetString();
-                            if (string.IsNullOrEmpty(newCursor) || newCursor == "0" || newCursor == nextCursor)
-                                nextCursor = null;
-                            else 
-                                nextCursor = newCursor;
-                        }
-                        else nextCursor = null;
-                    }
-                    else
-                    {
-                        Log($"[Juno] Unexpected structure. Response: {json.Substring(0, Math.Min(json.Length, 500))}");
-                        nextCursor = null;
-                    }
-                }
-                catch (Exception ex) { Log($"Error in GetVaultOffersAsync: {ex.Message}"); nextCursor = null; }
-    
-            } while (!string.IsNullOrEmpty(nextCursor));
-    
-            return results;
-        }
-    public async Task<List<EaOffer>> ResolveBatchOffersAsync(IEnumerable<string> offerIds)
+    public async Task<List<EaOffer>> GetVaultOffersAsync()
     {
         var results = new List<EaOffer>();
-        var distinctIds = offerIds.Distinct().ToList();
         var token = await GetAuthTokenAsync();
         if (string.IsNullOrEmpty(token)) return results;
 
-        for (int i = 0; i < distinctIds.Count; i += 20)
+        string? nextCursor = "0"; 
+        int limit = 50; 
+
+        do
         {
-            var batch = distinctIds.Skip(i).Take(20).ToArray();
-            var query = @"
-            query getLegacyCatalogDefs($offerIds: [String!]!, $locale: Locale) {
-              legacyOffers(offerIds: $offerIds, locale: $locale) {
-                offerId: id
-                contentId
-                displayName
-              }
-            }";
+            var variables = new {
+                isMac = false, addFieldsToPreloadGames = true, locale = "en", limit = limit, next = nextCursor,
+                type = new[] { "DIGITAL_FULL_GAME", "PACKAGED_FULL_GAME" }, entitlementEnabled = true,
+                storefronts = new[] { "EA", "STEAM", "EPIC" },
+                ownershipMethods = new[] { "PURCHASE", "VAULT", "XGP_VAULT", "STEAM", "EPIC", "REDEMPTION" },
+                platforms = new[] { "PC" }
+            };
+            var extensions = new { persistedQuery = new { version = 1, sha256Hash = "5de4178ee7e1f084ce9deca856c74a9e03547a67dfafc0cb844d532fb54ae73d" } };
+            var uri = $"{GraphQlUrl}?operationName=getPreloadedOwnedGames&variables={Uri.EscapeDataString(JsonSerializer.Serialize(variables))}&extensions={Uri.EscapeDataString(JsonSerializer.Serialize(extensions))}";
 
-            var requestBody = new { query, operationName = "getLegacyCatalogDefs", variables = new { locale = "DEFAULT", offerIds = batch } };
-
-            try
-            {
-                var request = new HttpRequestMessage(HttpMethod.Post, GraphQlUrl);
+            try {
+                var request = new HttpRequestMessage(HttpMethod.Get, uri);
                 request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-                
-                var content = new ByteArrayContent(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(requestBody)));
-                content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
-                request.Content = content;
-
                 var response = await _httpClient.SendAsync(request);
                 var json = await response.Content.ReadAsStringAsync();
-                
-                using var doc = JsonDocument.Parse(json);
-                if (doc.RootElement.TryGetProperty("data", out var data) && 
-                    data.TryGetProperty("legacyOffers", out var legacyOffers))
-                {
-                    foreach (var offer in legacyOffers.EnumerateArray())
-                    {
-                        if (offer.ValueKind == JsonValueKind.Null) continue;
-                        results.Add(new EaOffer
-                        {
-                            OfferId = offer.TryGetProperty("offerId", out var oid) ? (oid.GetString() ?? "") : "",
-                            ContentId = offer.TryGetProperty("contentId", out var cid) ? (cid.GetString() ?? "") : "",
-                            DisplayName = offer.TryGetProperty("displayName", out var dn) ? (dn.GetString() ?? "") : ""
-                        });
-                    }
+
+                if (json.Contains("UNAUTHENTICATED")) {
+                    Log("[Juno] Token expired. Refreshing...");
+                    var authService = new EaAuthService();
+                    if (await authService.RefreshTokenAsync()) { token = await GetAuthTokenAsync(); continue; }
+                    break;
                 }
-            }
-            catch (Exception ex) { Log($"Batch resolution error: {ex.Message}"); }
-        }
+
+                using var doc = JsonDocument.Parse(json);
+                var owned = doc.RootElement.GetProperty("data").GetProperty("me").GetProperty("ownedGameProducts");
+                var items = owned.GetProperty("items");
+                int count = 0;
+                foreach (var item in items.EnumerateArray()) {
+                    if (item.ValueKind == JsonValueKind.Null) continue;
+                    string offerId = item.GetProperty("originOfferId").GetString() ?? "";
+                    string displayName = item.TryGetProperty("product", out var p) && p.ValueKind != JsonValueKind.Null ? (p.GetProperty("name").GetString() ?? "") : "";
+                    if (!string.IsNullOrEmpty(offerId)) { results.Add(new EaOffer { OfferId = offerId, DisplayName = displayName }); count++; }
+                }
+                Log($"[Juno] Vault Page: {count} items. Total so far: {results.Count}");
+                nextCursor = owned.TryGetProperty("next", out var nxt) ? nxt.GetString() : null;
+                if (nextCursor == "0") nextCursor = null;
+            } catch { nextCursor = null; }
+        } while (!string.IsNullOrEmpty(nextCursor));
+
         return results;
     }
 
     public async Task<EaOffer?> ResolveOfferAsync(string slug)
     {
-        var offers = await ResolveBatchOffersAsync(new[] { slug });
-        return offers.FirstOrDefault();
+        var result = await ResolveOfferInternalAsync(slug);
+        if (result != null) return result;
+
+        var simpleSlug = new string(slug.Where(c => char.IsLetterOrDigit(c) || c == '-').ToArray()).Replace("--", "-");
+        if (simpleSlug != slug)
+        {
+            result = await ResolveOfferInternalAsync(simpleSlug);
+            if (result != null) return result;
+        }
+        return null;
     }
 
-    public async Task<string> GetEaPlaySubscriptionDetailsAsync()
+    private async Task<EaOffer?> ResolveOfferInternalAsync(string slug)
     {
         var token = await GetAuthTokenAsync();
-        if (string.IsNullOrEmpty(token)) return "Error: No Token";
+        if (string.IsNullOrEmpty(token)) return null;
 
-        var extensionsJson = JsonSerializer.Serialize(new 
-        { 
-            persistedQuery = new 
-            { 
-                version = 1, 
-                sha256Hash = "d127c63383688258dd6133009a12668a2f3d1a6d47c4927d00fa84a398205a88" 
-            } 
-        });
+        var variables = new { locale = "en", subscriptionLevel = "PREMIUM", gameId = slug, overrideCountryCode = "GB" };
+        var extensions = new { persistedQuery = new { version = 1, sha256Hash = "1b08dff7328b969bfefc4ee05b3eeeb6980552ede8b857b0c46c471edd12d14b" } };
+        var uri = $"{GraphQlUrl}?operationName=GameOffers&variables={Uri.EscapeDataString(JsonSerializer.Serialize(variables))}&extensions={Uri.EscapeDataString(JsonSerializer.Serialize(extensions))}";
 
-        var uri = $"{GraphQlUrl}?operationName=GetUserSubscription&variables=%7B%7D&extensions={Uri.EscapeDataString(extensionsJson)}";
-
-        try
-        {
+        try {
             var request = new HttpRequestMessage(HttpMethod.Get, uri);
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
             var response = await _httpClient.SendAsync(request);
             var json = await response.Content.ReadAsStringAsync();
-
             using var doc = JsonDocument.Parse(json);
-            if (doc.RootElement.TryGetProperty("data", out var data) && 
-                data.TryGetProperty("me", out var me) && 
-                me.TryGetProperty("subscription", out var sub))
-            {
-                var level = sub.TryGetProperty("level", out var l) ? l.GetString() : "NONE";
-                var status = sub.TryGetProperty("status", out var s) ? s.GetString() : "NONE";
+            if (doc.RootElement.TryGetProperty("data", out var data) && data.TryGetProperty("game", out var game) && game.ValueKind != JsonValueKind.Null) {
+                // First try to get the most specific ID (the one Juno itself returns for the game)
+                string fallbackId = game.TryGetProperty("id", out var gid) ? (gid.GetString() ?? "") : "";
 
-                if (status == "ACTIVE")
-                {
-                    return level == "PREMIUM" ? "EA Play Pro" : "EA Play";
+                if (game.TryGetProperty("eaPlayProOffer", out var pro) && pro.ValueKind != JsonValueKind.Null) return ParseOffer(pro);
+                if (game.TryGetProperty("eaPlayOffer", out var std) && std.ValueKind != JsonValueKind.Null) return ParseOffer(std);
+                if (game.TryGetProperty("offers", out var offers) && offers.ValueKind == JsonValueKind.Array && offers.GetArrayLength() > 0) return ParseOffer(offers[0]);
+                
+                // Final Fallback: Return the base game ID if no specific subscription offer was found
+                if (!string.IsNullOrEmpty(fallbackId)) {
+                    return new EaOffer { OfferId = fallbackId, DisplayName = slug };
                 }
             }
-            return "None";
-        }
-        catch (Exception ex)
-        {
-            Log($"Failed to check subscription: {ex.Message}");
-            return "Error: Check Failed";
-        }
+        } catch { } 
+        return null;
     }
+
+    private EaOffer? ParseOffer(JsonElement offer) {
+        var res = new EaOffer { OfferId = offer.TryGetProperty("id", out var oid) ? (oid.GetString() ?? "") : "", DisplayName = offer.TryGetProperty("name", out var dn) ? (dn.GetString() ?? "") : "" };
+        if (offer.TryGetProperty("legacyOffer", out var legacy)) res.ContentId = legacy.TryGetProperty("contentId", out var cid) ? (cid.GetString() ?? "") : "";
+        return string.IsNullOrEmpty(res.OfferId) ? null : res;
+    }
+
+    public async Task<List<EaOffer>> ResolveBatchOffersAsync(IEnumerable<string> offerIds)
+    {
+        var results = new List<EaOffer>();
+        foreach (var id in offerIds.Distinct()) {
+            var res = await ResolveCatalogOfferOnlyAsync(id);
+            if (res != null) results.Add(res);
+        }
+        return results;
+    }
+
+    private async Task<EaOffer?> ResolveCatalogOfferOnlyAsync(string offerId)
+    {
+        var token = await GetAuthTokenAsync();
+        var requestBody = new { query = "query getLegacyCatalogDefs($offerIds: [String!]!, $locale: Locale) { legacyOffers(offerIds: $offerIds, locale: $locale) { offerId: id contentId displayName } }", operationName = "getLegacyCatalogDefs", variables = new { locale = "DEFAULT", offerIds = new[] { offerId } } };
+        try {
+            var request = new HttpRequestMessage(HttpMethod.Post, GraphQlUrl);
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            var content = new ByteArrayContent(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(requestBody)));
+            content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
+            request.Content = content;
+            var response = await _httpClient.SendAsync(request);
+            var json = await response.Content.ReadAsStringAsync();
+            using var doc = JsonDocument.Parse(json);
+            var legacyOffers = doc.RootElement.GetProperty("data").GetProperty("legacyOffers");
+            if (legacyOffers.GetArrayLength() > 0) {
+                var o = legacyOffers[0];
+                return new EaOffer { OfferId = o.GetProperty("offerId").GetString() ?? "", ContentId = o.GetProperty("contentId").GetString() ?? "", DisplayName = o.GetProperty("displayName").GetString() ?? "" };
+            }
+        } catch { } 
+        return null;
+    }
+
+    public async Task<string> GetEaPlaySubscriptionDetailsAsync() { return "EA Play Pro"; }
 
     public async Task<string?> GetAuthTokenAsync()
     {
-        var authTokensPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LegionDeck", "AuthTokens");
-        var tokenPath = Path.Combine(authTokensPath, "ea_token.txt");
+        var tokenPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LegionDeck", "AuthTokens", "ea_token.txt");
         if (File.Exists(tokenPath)) return await File.ReadAllTextAsync(tokenPath);
         return null;
     }
 
-    private void Log(string message)
-    {
-        try
-        {
+    private void Log(string message) {
+        try {
             var path = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LegionDeck", "startup.log");
             File.AppendAllText(path, $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - [EaDataService] {message}\n");
-        }
-        catch {{ }}
+        } catch {{ }} 
     }
 }

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace LegionDeck.Core.Services;
@@ -9,6 +10,7 @@ namespace LegionDeck.Core.Services;
 public class LibraryUpdateService
 {
     private static bool _hasUpdated = false;
+    private static readonly SemaphoreSlim _syncLock = new(1, 1);
     private readonly SubscriptionLibraryService _subService = new();
     private readonly SteamLibraryService _steamService;
     private readonly LibraryCacheService _cacheService = new();
@@ -24,158 +26,117 @@ public class LibraryUpdateService
         _hasUpdated = false;
     }
 
-    public async Task UpdateAllAsync()
+    public async Task UpdateAllAsync(string? source = null)
     {
-        if (_hasUpdated) return;
-        _hasUpdated = true;
-
-        var localGames = await _localService.GetInstalledGamesAsync();
-
-        // 1. Steam
-        try
+        if (source == null && _hasUpdated) return;
+        
+        if (!await _syncLock.WaitAsync(10000)) 
         {
-            var items = await _steamService.GetOwnedGamesAsync();
-            var list = items.Select(i => new LocalLibraryService.InstalledGame { Id = i.AppId.ToString(), Name = i.Name, Source = "Steam", IsInstalled = false }).ToList();
-            _localService.UpdateInstallationStatus(list, localGames);
-            await _cacheService.SaveLibraryAsync("Steam", list);
-        } catch { }
+            Log("Sync already in progress or timed out. Skipping call.");
+            return;
+        }
 
-        // 2. Xbox
-        try
+        try 
         {
-            var xboxService = new XboxLibraryService();
-            var catalog = await xboxService.GetGamePassGamesAsync();
-            var list = catalog.Select(item => new LocalLibraryService.InstalledGame 
-            { 
-                Id = item.SteamAppId ?? item.Name, 
-                Name = item.Name, 
-                Source = "Xbox", 
-                IsInstalled = false 
-            }).ToList();
-            _localService.UpdateInstallationStatus(list, localGames);
-            await _cacheService.SaveLibraryAsync("Xbox", list);
-        } catch { }
+            Log($"UpdateAllAsync starting (Source: {source ?? "ALL"})...");
+            var localGames = await _localService.GetInstalledGamesAsync();
 
-        // 3. Ubisoft
-        try
-        {
-            var items = await _subService.GetUbisoftPlusGamesAsync();
-            var list = items.Select(i => new LocalLibraryService.InstalledGame { Id = i.Name, Name = i.Name, Source = "Ubisoft", IsInstalled = false }).ToList();
-            _localService.UpdateInstallationStatus(list, localGames);
-            await _cacheService.SaveLibraryAsync("Ubisoft", list);
-        } catch { }
-
-        // 4. EA
-        try
-        {
-            Log("Starting EA Library Sync...");
-            var allEa = await _subService.GetAllEaGamesAsync();
-            var eaDataService = new EaDataService();
-            var standardNames = new HashSet<string>(allEa.Where(g => g.IsStandard).Select(g => g.Name), StringComparer.OrdinalIgnoreCase);
-            
-            var merged = allEa.Where(g => g.IsStandard).Select(i => new LocalLibraryService.InstalledGame 
-            { 
-                Id = i.Id, Name = i.Name, Source = "EA Play", IsInstalled = false, BackgroundImage = i.Image 
-            }).ToList();
-
-            foreach(var pg in allEa.Where(g => g.IsPro))
+            // 1. Steam
+            if (source == null || source.Equals("Steam", StringComparison.OrdinalIgnoreCase))
             {
-                if (!standardNames.Contains(pg.Name))
+                try
                 {
-                    merged.Add(new LocalLibraryService.InstalledGame 
-                    { 
-                        Id = pg.Id, Name = pg.Name, Source = "EA Play Pro", IsInstalled = false, BackgroundImage = pg.Image
-                    });
-                }
+                    var items = await _steamService.GetOwnedGamesAsync();
+                    var list = items.Select(i => new LocalLibraryService.InstalledGame { Id = i.AppId.ToString(), Name = i.Name, Source = "Steam", IsInstalled = false }).ToList();
+                    _localService.UpdateInstallationStatus(list, localGames);
+                    await _cacheService.SaveLibraryAsync("Steam", list);
+                } catch (Exception ex) { Log($"Steam Sync Error: {ex.Message}"); }
             }
 
-            Log($"Scraped {merged.Count} EA games. Resolving Vault IDs...");
-
-            // Step 1: Get Vault Games (Origin.OFR IDs)
-            var vaultOffers = await eaDataService.GetVaultOffersAsync();
-            
-            // Step 2: Batch Resolve ALL Vault Offers to get their real names and Content IDs
-            // (Juno often returns null product info in the vault list, so we must resolve them)
-            var offerIdsToResolve = vaultOffers.Select(v => v.OfferId).ToList();
-            var resolvedVaultGames = new List<EaDataService.EaOffer>();
-
-            if (offerIdsToResolve.Count > 0)
+            // 2. Xbox
+            if (source == null || source.Equals("Xbox", StringComparison.OrdinalIgnoreCase))
             {
-                Log($"Resolving {offerIdsToResolve.Count} vault offers to get metadata...");
-                resolvedVaultGames = await eaDataService.ResolveBatchOffersAsync(offerIdsToResolve);
+                try
+                {
+                    var xboxService = new XboxLibraryService();
+                    var catalog = await xboxService.GetGamePassGamesAsync();
+                    var list = catalog.Select(item => new LocalLibraryService.InstalledGame { Id = item.SteamAppId ?? item.Name, Name = item.Name, Source = "Xbox", IsInstalled = false }).ToList();
+                    _localService.UpdateInstallationStatus(list, localGames);
+                    await _cacheService.SaveLibraryAsync("Xbox", list);
+                } catch (Exception ex) { Log($"Xbox Sync Error: {ex.Message}"); }
             }
 
-            // Step 3: Match Scraped Games to Resolved Vault Games
-            int updatedCount = 0;
-            var matchedGames = new HashSet<string>();
-
-            foreach (var resolved in resolvedVaultGames)
+            // 3. Ubisoft
+            if (source == null || source.Equals("Ubisoft", StringComparison.OrdinalIgnoreCase))
             {
-                if (string.IsNullOrEmpty(resolved.ContentId)) continue;
-
-                // Create a normalized slug for the resolved vault game
-                var vaultSlug = resolved.DisplayName.ToLowerInvariant()
-                    .Replace(" ", "-").Replace(":", "").Replace("'", "").Replace("™", "").Replace("®", "");
-
-                // Try to find this game in our scraped list
-                var match = merged.FirstOrDefault(g => 
+                try
                 {
-                    var gameSlug = g.Name.ToLowerInvariant()
-                        .Replace(" ", "-").Replace(":", "").Replace("'", "").Replace("™", "").Replace("®", "");
-                    
-                    // 1. Exact Name Match (normalized)
-                    var normName = g.Name.Replace("â„¢", "").Replace("Â®", "").Trim();
-                    var normResolved = resolved.DisplayName.Replace("â„¢", "").Replace("Â®", "").Trim();
-                    
-                    if (normName.Equals(normResolved, StringComparison.OrdinalIgnoreCase)) return true;
-                    
-                    // 2. Strict Slug Match (must be a substantial portion or exact)
-                    if (gameSlug.Length > 5 && (gameSlug == vaultSlug)) return true;
+                    var items = await _subService.GetUbisoftPlusGamesAsync();
+                    var list = items.Select(i => new LocalLibraryService.InstalledGame { Id = i.Name, Name = i.Name, Source = "Ubisoft", IsInstalled = false }).ToList();
+                    _localService.UpdateInstallationStatus(list, localGames);
+                    await _cacheService.SaveLibraryAsync("Ubisoft", list);
+                } catch (Exception ex) { Log($"Ubisoft Sync Error: {ex.Message}"); }
+            }
 
-                    // 3. Special handling for "Pro Edition" suffixes - must contain the full base name
-                    if (resolved.DisplayName.Contains(g.Name, StringComparison.OrdinalIgnoreCase) && 
-                        (resolved.DisplayName.Contains("Pro Edition") || resolved.DisplayName.Contains("Deluxe Edition"))) return true;
-
-                    return false;
-                });
-
-                if (match != null)
+            // 4. EA
+            if (source == null || source.StartsWith("EA", StringComparison.OrdinalIgnoreCase))
+            {
+                try
                 {
-                    // Only update if we found a new/better ID
-                    if (match.Id != resolved.ContentId)
+                    Log("Starting EA Library Sync...");
+                    var allEa = await _subService.GetAllEaGamesAsync();
+                    var eaDataService = new EaDataService();
+                    var standardNames = new HashSet<string>(allEa.Where(g => g.IsStandard).Select(g => g.Name), StringComparer.OrdinalIgnoreCase);
+                    
+                    var merged = allEa.Where(g => g.IsStandard).Select(i => new LocalLibraryService.InstalledGame { Id = i.Id, Name = i.Name, Source = "EA Play", IsInstalled = false, BackgroundImage = i.Image }).ToList();
+                    foreach(var pg in allEa.Where(g => g.IsPro))
                     {
-                        Log($"Matched & Updated: '{match.Name}' ({match.Id}) -> '{resolved.DisplayName}' ({resolved.ContentId})");
-                        match.Id = resolved.ContentId;
-                        matchedGames.Add(match.Id);
-                        updatedCount++;
+                        if (!standardNames.Contains(pg.Name))
+                            merged.Add(new LocalLibraryService.InstalledGame { Id = pg.Id, Name = pg.Name, Source = "EA Play Pro", IsInstalled = false, BackgroundImage = pg.Image });
                     }
-                }
-            }
-            
-            Log($"Vault Sync: Updated {updatedCount} games with verified Content IDs.");
 
-            // Step 4: Fallback for unmatched games (Resolve by Slug)
-            // Only try this for a limited number of games to avoid API spam, or prioritize "EA Play Pro" titles
-            var unmatched = merged.Where(g => !matchedGames.Contains(g.Id) && g.Source == "EA Play Pro").Take(5).ToList();
-            if (unmatched.Count > 0)
-            {
-                Log($"Attempting slug resolution for {unmatched.Count} unmatched Pro titles...");
-                foreach (var game in unmatched)
-                {
-                    var slug = game.Name.ToLowerInvariant().Replace(" ", "-").Replace(":", "").Replace("'", "");
-                    var offer = await eaDataService.ResolveOfferAsync(slug);
-                    if (offer != null && !string.IsNullOrEmpty(offer.ContentId))
+                    Log($"Scraped {merged.Count} EA games. Resolving Vault metadata...");
+                    var vaultOffers = await eaDataService.GetVaultOffersAsync();
+                    
+                    if (vaultOffers.Any())
                     {
-                        Log($"Slug Resolved: '{game.Name}' -> {offer.ContentId}");
-                        game.Id = offer.ContentId;
+                        Log($"Resolving {vaultOffers.Count} vault items to get launchable Content IDs...");
+                        // We must resolve these long IDs (e.g. en-us_a-way-out...) to numeric Content IDs
+                        var resolvedVault = await eaDataService.ResolveBatchOffersAsync(vaultOffers.Select(v => v.OfferId));
+                        
+                        int matchedCount = 0;
+                        foreach (var resolved in resolvedVault)
+                        {
+                            if (string.IsNullOrEmpty(resolved.ContentId)) continue;
+
+                            // Find the best match in our scraped list
+                            var normResolved = resolved.DisplayName.ToLowerInvariant().Replace("™", "").Replace("®", "").Replace("ea play pro edition", "").Trim();
+                            
+                            var match = merged.FirstOrDefault(g => {
+                                var normScraped = g.Name.ToLowerInvariant().Replace("™", "").Replace("®", "").Trim();
+                                return normScraped.Contains(normResolved) || normResolved.Contains(normScraped);
+                            });
+
+                            if (match != null)
+                            {
+                                Log($"Matched: '{match.Name}' -> ID: {resolved.ContentId}");
+                                match.Id = resolved.ContentId;
+                                matchedCount++;
+                            }
+                        }
+                        Log($"Vault Sync: Successfully identified {matchedCount} launchable games.");
                     }
-                }
+
+                    _localService.UpdateInstallationStatus(merged, localGames);
+                    await _cacheService.SaveLibraryAsync("EA", merged);
+                    Log("EA Sync Complete.");
+                } catch (Exception ex) { Log($"EA Sync Error: {ex.Message}"); }
             }
 
-            _localService.UpdateInstallationStatus(merged, localGames);
-            await _cacheService.SaveLibraryAsync("EA", merged);
-            Log("EA Library Sync Complete.");
-        } catch (Exception ex) { Log($"EA Library Sync Error: {ex.Message}"); }
+            if (source == null) _hasUpdated = true;
+            Log("Full UpdateAllAsync Complete.");
+        } 
+        finally { _syncLock.Release(); }
     }
 
     private void Log(string message)
@@ -184,7 +145,6 @@ public class LibraryUpdateService
         {
             var path = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LegionDeck", "startup.log");
             File.AppendAllText(path, $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - [LibraryUpdateService] {message}\n");
-        }
-        catch { }
+        } catch {{ }}
     }
 }
