@@ -81,55 +81,97 @@ public class LibraryUpdateService
             // 4. EA
             if (source == null || source.StartsWith("EA", StringComparison.OrdinalIgnoreCase))
             {
-                try
-                {
+                try {
                     Log("Starting EA Library Sync...");
                     var allEa = await _subService.GetAllEaGamesAsync();
                     var eaDataService = new EaDataService();
-                    var standardNames = new HashSet<string>(allEa.Where(g => g.IsStandard).Select(g => g.Name), StringComparer.OrdinalIgnoreCase);
                     
-                    var merged = allEa.Where(g => g.IsStandard).Select(i => new LocalLibraryService.InstalledGame { Id = i.Id, Name = i.Name, Source = "EA Play", IsInstalled = false, BackgroundImage = i.Image }).ToList();
-                    foreach(var pg in allEa.Where(g => g.IsPro))
-                    {
-                        if (!standardNames.Contains(pg.Name))
-                            merged.Add(new LocalLibraryService.InstalledGame { Id = pg.Id, Name = pg.Name, Source = "EA Play Pro", IsInstalled = false, BackgroundImage = pg.Image });
-                    }
+                    // 1. Get Owned Offers (Long IDs)
+                    var ownedOffers = await eaDataService.GetVaultOffersAsync();
+                    Log($"Found {ownedOffers.Count} owned entitlements in Juno.");
 
-                    Log($"Scraped {merged.Count} EA games. Resolving Vault metadata...");
-                    var vaultOffers = await eaDataService.GetVaultOffersAsync();
+                    // 2. Resolve to Numeric Content IDs (Launch IDs)
+                    var resolvedOwned = await eaDataService.ResolveBatchOffersAsync(ownedOffers.Select(o => o.OfferId));
                     
-                    if (vaultOffers.Any())
+                    // Handle duplicates safely (e.g. Dead Space 2008 vs 2023)
+                    var contentIdMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                    foreach (var r in resolvedOwned)
                     {
-                        Log($"Resolving {vaultOffers.Count} vault items to get launchable Content IDs...");
-                        // We must resolve these long IDs (e.g. en-us_a-way-out...) to numeric Content IDs
-                        var resolvedVault = await eaDataService.ResolveBatchOffersAsync(vaultOffers.Select(v => v.OfferId));
-                        
-                        int matchedCount = 0;
-                        foreach (var resolved in resolvedVault)
+                        var key = r.DisplayName.ToLowerInvariant().Replace("™", "").Replace("®", "").Trim();
+                        if (!contentIdMap.ContainsKey(key))
                         {
-                            if (string.IsNullOrEmpty(resolved.ContentId)) continue;
-
-                            // Find the best match in our scraped list
-                            var normResolved = resolved.DisplayName.ToLowerInvariant().Replace("™", "").Replace("®", "").Replace("ea play pro edition", "").Trim();
-                            
-                            var match = merged.FirstOrDefault(g => {
-                                var normScraped = g.Name.ToLowerInvariant().Replace("™", "").Replace("®", "").Trim();
-                                return normScraped.Contains(normResolved) || normResolved.Contains(normScraped);
-                            });
-
-                            if (match != null)
+                            contentIdMap[key] = r.ContentId;
+                        }
+                        else 
+                        {
+                            // If duplicate, maybe log it but keep existing? Or prioritize newer ID?
+                            // Content IDs are usually incremental, so larger = newer?
+                            if (long.TryParse(r.ContentId, out long newId) && long.TryParse(contentIdMap[key], out long oldId) && newId > oldId)
                             {
-                                Log($"Matched: '{match.Name}' -> ID: {resolved.ContentId}");
-                                match.Id = resolved.ContentId;
-                                matchedCount++;
+                                contentIdMap[key] = r.ContentId;
                             }
                         }
-                        Log($"Vault Sync: Successfully identified {matchedCount} launchable games.");
+                    }
+                    
+                    // Debug Log
+                    foreach(var kvp in contentIdMap.Take(5)) Log($"Map: {kvp.Key} -> {kvp.Value}");
+
+                    var merged = new List<LocalLibraryService.InstalledGame>();
+                    var processedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+                    // 3. Process Scraped Games (144 items)
+                    foreach (var sg in allEa)
+                    {
+                        var normName = sg.Name.ToLowerInvariant().Replace("™", "").Replace("®", "").Trim();
+                        var game = new LocalLibraryService.InstalledGame { 
+                            Name = sg.Name, 
+                            Source = sg.IsPro ? "EA Play Pro" : "EA Play",
+                            IsInstalled = false,
+                            BackgroundImage = sg.Image
+                        };
+
+                        // Match with Resolved Content IDs
+                        string? launchId = null;
+                        if (contentIdMap.TryGetValue(normName, out var cid)) launchId = cid;
+                        else
+                        {
+                            // Fuzzy match
+                            var fuzzy = contentIdMap.Keys.FirstOrDefault(k => k.Contains(normName) || normName.Contains(k));
+                            if (fuzzy != null) launchId = contentIdMap[fuzzy];
+                        }
+
+                        if (!string.IsNullOrEmpty(launchId))
+                        {
+                            game.Id = launchId; // Set numeric ID
+                            Log($"  [MATCH] {sg.Name} -> LaunchID: {game.Id}");
+                        }
+                        else
+                        {
+                            // Not in user's library
+                            game.Source += " (Not Redeemed)";
+                            // game.Id remains empty or scraper ID
+                        }
+
+                        merged.Add(game);
+                        processedNames.Add(sg.Name);
                     }
 
-                    _localService.UpdateInstallationStatus(merged, localGames);
+                    // 4. Add remaining Juno games that weren't in the scraper
+                    foreach (var ro in resolvedOwned)
+                    {
+                        if (!processedNames.Contains(ro.DisplayName))
+                        {
+                            merged.Add(new LocalLibraryService.InstalledGame {
+                                Id = ro.ContentId,
+                                Name = ro.DisplayName,
+                                Source = "EA Play",
+                                IsInstalled = false
+                            });
+                        }
+                    }
+
                     await _cacheService.SaveLibraryAsync("EA", merged);
-                    Log("EA Sync Complete.");
+                    Log($"EA Sync Complete. Merged {merged.Count} games.");
                 } catch (Exception ex) { Log($"EA Sync Error: {ex.Message}"); }
             }
 

@@ -64,14 +64,28 @@ public class GameEnrichmentService
                             sgdbCover = await _sgdbService.GetVerticalCoverAsync(appId);
                         }
                         
-                        // B. Try by Name (Fallback or non-Steam)
+                        // B. Try by Name (Fallback or non-Steam like EA)
                         if (string.IsNullOrEmpty(sgdbCover))
                         {
                             var nameToSearch = _metadataService.GetName(idStr) ?? game.Name;
+                            
+                            // Clean name for better search results (remove trademarks etc)
+                            nameToSearch = nameToSearch.Replace("™", "").Replace("®", "").Trim();
+
                             if (!string.IsNullOrEmpty(nameToSearch))
                             {
                                 var sgdbId = await _sgdbService.SearchGameIdAsync(nameToSearch);
-                                if (sgdbId.HasValue) sgdbCover = await _sgdbService.GetVerticalCoverByGameIdAsync(sgdbId.Value);
+                                if (sgdbId.HasValue) 
+                                {
+                                    sgdbCover = await _sgdbService.GetVerticalCoverByGameIdAsync(sgdbId.Value);
+                                    
+                                    // Also fetch Hero if we have the ID handy
+                                    if (!_metadataService.HasHero(idStr))
+                                    {
+                                        var hero = await _sgdbService.GetHeroImageByGameIdAsync(sgdbId.Value);
+                                        if (!string.IsNullOrEmpty(hero)) _metadataService.SetHero(idStr, hero);
+                                    }
+                                }
                             }
                         }
 

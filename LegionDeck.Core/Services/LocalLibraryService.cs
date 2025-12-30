@@ -33,44 +33,23 @@ public class LocalLibraryService
         {
             if (game.Source != null && game.Source.StartsWith("EA", StringComparison.OrdinalIgnoreCase))
             {
-                // Hardcoded fix for Veilguard to ensure it works even if auth fails
-                string slug = game.Name.ToLowerInvariant()
-                    .Replace(" ", "-")
-                    .Replace(":", "")
-                    .Replace("'", "")
-                    .Replace("™", "")
-                    .Replace("®", "")
-                    .Replace(".", "")
-                    .Replace("!", "");
-
+                // Hardcoded fix for Veilguard
+                string slug = game.Name.ToLowerInvariant().Replace(" ", "-").Replace(":", "").Replace("'", "").Replace("™", "").Replace("®", "").Replace(".", "").Replace("!", "");
                 if (slug.Contains("veilguard") || game.Id == "Origin.OFR.50.0005599")
                 {
-                    Log($"[EA] Applying hardcoded Content ID for Veilguard.");
+                    Log($"[EA] Applying verified Content ID for Veilguard.");
                     game.Id = "197044";
+                }
+
+                if (string.IsNullOrEmpty(game.Id) || game.Id.StartsWith("Origin.OFR"))
+                {
+                    Log($"[EA] No numeric Content ID found for {game.Name} (ID: {game.Id}). Opening Library.");
+                    uri = "origin2://library/open";
                 }
                 else
                 {
-                    // For other uninstalled EA games, we resolve the real Offer/Content ID on-demand
-                    var eaDataService = new EaDataService();
-                    
-                    var token = await eaDataService.GetAuthTokenAsync();
-                    Log($"[EA] On-demand resolution for {game.Name}. Token available: {!string.IsNullOrEmpty(token)}");
-
-                    var offer = await eaDataService.ResolveOfferAsync(slug);
-                    if (offer != null)
-                    {
-                        // Prioritize the numeric ContentId if available, as it's most reliable for deep-linking
-                        string bestId = !string.IsNullOrEmpty(offer.ContentId) ? offer.ContentId : offer.OfferId;
-                        
-                        Log($"[EA] Resolved on-demand ID for {game.Name}: {game.Id} -> {bestId}");
-                        game.Id = bestId;
-                    }
-                    else 
-                    {
-                        Log($"[EA] Failed to resolve on-demand ID for {game.Name} (slug: {slug})");
-                    }
+                    uri = BuildEaUri(game);
                 }
-                uri = BuildEaUri(game);
             }
             else
             {
@@ -119,24 +98,25 @@ public class LocalLibraryService
     {
         if (string.IsNullOrEmpty(game.Id)) return "origin2://library/open";
 
-        if (game.IsInstalled)
+        // Generate slug from name
+        string slug = game.Name.ToLowerInvariant()
+            .Replace(" ", "-")
+            .Replace(":", "")
+            .Replace("'", "")
+            .Replace("™", "")
+            .Replace("®", "")
+            .Replace(".", "")
+            .Replace("!", "");
+
+        if (game.IsInstalled || (!string.IsNullOrEmpty(game.Id) && !game.Id.StartsWith("Origin.OFR")))
         {
-             // For installed games, launch works if we have the Content ID from registry.
-             return $"origin2://game/launch/?offerIds={game.Id}&title={Uri.EscapeDataString(game.Name)}";
+             // Numeric ID (Content ID) -> Installer or Launch
+             return $"origin2://game/launch/?offerIds={game.Id}&slug={slug}&autoDownload=true";
         }
         else 
         {
-            string slug = game.Name.ToLowerInvariant()
-                .Replace(" ", "-")
-                .Replace(":", "")
-                .Replace("'", "")
-                .Replace("™", "")
-                .Replace("®", "")
-                .Replace(".", "")
-                .Replace("!", "");
-
-            // Primary deep-link using the resolved identifier (now likely a numeric Content ID)
-            return $"origin2://game/launch/?offerIds={game.Id}&slug={slug}&autoDownload=true";
+            // No valid Content ID -> Store/Library Page fallback
+            return $"origin2://store/open?slug={slug}";
         }
     }
 

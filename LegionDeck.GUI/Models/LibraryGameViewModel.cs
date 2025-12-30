@@ -39,6 +39,17 @@ public class LibraryGameViewModel : INotifyPropertyChanged
 
     public string Source => GameData.Source;
     public bool IsInstalled => GameData.IsInstalled;
+    public bool IsNotRedeemed => Source.Contains("(Not Redeemed)", StringComparison.OrdinalIgnoreCase);
+
+    public string StatusText 
+    {
+        get
+        {
+            if (IsNotRedeemed) return "NOT REDEEMED";
+            if (IsInstalled) return "READY TO PLAY";
+            return "IN CLOUD";
+        }
+    }
 
     private string _type = "game"; 
     public string Type

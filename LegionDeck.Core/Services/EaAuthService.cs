@@ -169,13 +169,13 @@ public class EaLoginForm : Form
             _webView.CoreWebView2.Settings.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
             // Attach the token catcher to REQUESTS
-            _webView.CoreWebView2.WebResourceRequested += (s, args) => {
+            _webView.CoreWebView2.WebResourceRequested += (s, args) =>
+            {
                 var uri = args.Request.Uri;
-                if (uri.Contains("service-aggregation-layer.juno.ea.com/graphql"))
+                Log($"[NetworkSniffer] Request: {uri}");
+
+                if (uri.Contains("graphql"))
                 {
-                    Log($"Intercepted Juno GraphQL Request: {uri}");
-                    
-                    // Correct way to get headers in WebView2
                     var headers = args.Request.Headers;
                     if (headers.Contains("Authorization"))
                     {
@@ -186,34 +186,14 @@ public class EaLoginForm : Form
                             var authTokensPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LegionDeck", "AuthTokens");
                             Directory.CreateDirectory(authTokensPath);
                             File.WriteAllText(Path.Combine(authTokensPath, "ea_token.txt"), token);
-                        Log("[SUCCESS] Captured new Juno Bearer Token from Authorization header.");
-                        _tokenCaptured = true;
-                        
-                        // Force close manual login window once we have the token
-                        if (!_isSilent)
-                        {
-                            Log("Manual login successful. Closing window.");
-                            _tcs.TrySetResult("EALoggedIn");
-                            this.Invoke(new Action(this.Close));
+                            Log("[SUCCESS] Captured Juno Bearer Token.");
                         }
-                        else 
-                        {
-                            _ = CheckForLogin();
-                        }
-                        }
-                    }
-                    else 
-                    {
-                        // Debug: Log all header names to see if we missed it
-                        var headerNames = new List<string>();
-                        foreach (var header in headers) { headerNames.Add(header.Key); }
-                        Log($"Authorization header missing. Available headers: {string.Join(", ", headerNames)}");
                     }
                 }
             };
 
-            // Filters are required for WebResourceRequested
-            _webView.CoreWebView2.AddWebResourceRequestedFilter("https://service-aggregation-layer.juno.ea.com/graphql*", CoreWebView2WebResourceContext.All);
+            // Capture all requests
+            _webView.CoreWebView2.AddWebResourceRequestedFilter("*", CoreWebView2WebResourceContext.All);
 
             _webView.CoreWebView2.NewWindowRequested += (s, args) => { args.Handled = true; _webView.Source = new Uri(args.Uri); };
             

@@ -91,8 +91,8 @@
                                            TextWrapping="Wrap" MaxLines="2" Height="40"
                                            TextTrimming="CharacterEllipsis" FontSize="13" />
                                 
-                                <TextBlock Text="{x:Bind IsInstalled, Mode=OneWay, Converter={StaticResource StatusTextConverter}}" 
-                                           Foreground="{x:Bind IsInstalled, Mode=OneWay, Converter={StaticResource StatusColorConverter}}" 
+                                <TextBlock Text="{x:Bind StatusText, Mode=OneWay, Converter={StaticResource StatusTextConverter}}" 
+                                           Foreground="{x:Bind StatusText, Mode=OneWay, Converter={StaticResource StatusColorConverter}}" 
                                            FontWeight="ExtraBold" FontSize="11" Margin="0,0,0,4" />
                                 
                                 <Grid>
