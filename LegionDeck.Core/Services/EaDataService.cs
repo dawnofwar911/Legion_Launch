@@ -38,15 +38,23 @@ public class EaDataService
         if (string.IsNullOrEmpty(token)) return results;
 
         string? nextCursor = "0"; 
-        int limit = 50; 
+        int limit = 40; 
+        int safetyCounter = 0;
 
-        do
+        Log("[Juno] Starting Exhaustive Paginated Scan...");
+
+        while (!string.IsNullOrEmpty(nextCursor) && safetyCounter < 25)
         {
+            safetyCounter++;
             var variables = new {
                 isMac = false, addFieldsToPreloadGames = true, locale = "en", limit = limit, next = nextCursor,
                 type = new[] { "DIGITAL_FULL_GAME", "PACKAGED_FULL_GAME" }, entitlementEnabled = true,
                 storefronts = new[] { "EA", "STEAM", "EPIC" },
-                ownershipMethods = new[] { "PURCHASE", "VAULT", "XGP_VAULT", "STEAM", "EPIC", "REDEMPTION" },
+                ownershipMethods = new[] { 
+                    "UNKNOWN", "ASSOCIATION", "PURCHASE", "REDEMPTION", "GIFT_RECEIPT", "ENTITLEMENT_GRANT", 
+                    "DIRECT_ENTITLEMENT", "PRE_ORDER_PURCHASE", "VAULT", "XGP_VAULT", "STEAM", "STEAM_VAULT", 
+                    "STEAM_SUBSCRIPTION", "EPIC", "EPIC_VAULT", "EPIC_SUBSCRIPTION", "XGP_SUBSCRIPTION"
+                },
                 platforms = new[] { "PC" }
             };
             var extensions = new { persistedQuery = new { version = 1, sha256Hash = "5de4178ee7e1f084ce9deca856c74a9e03547a67dfafc0cb844d532fb54ae73d" } };
@@ -59,28 +67,42 @@ public class EaDataService
                 var json = await response.Content.ReadAsStringAsync();
 
                 if (json.Contains("UNAUTHENTICATED")) {
-                    Log("[Juno] Token expired. Refreshing...");
+                    Log("[Juno] Token expired during scan. Refreshing...");
                     var authService = new EaAuthService();
                     if (await authService.RefreshTokenAsync()) { token = await GetAuthTokenAsync(); continue; }
                     break;
                 }
 
                 using var doc = JsonDocument.Parse(json);
-                var owned = doc.RootElement.GetProperty("data").GetProperty("me").GetProperty("ownedGameProducts");
-                var items = owned.GetProperty("items");
-                int count = 0;
-                foreach (var item in items.EnumerateArray()) {
-                    if (item.ValueKind == JsonValueKind.Null) continue;
-                    string offerId = item.GetProperty("originOfferId").GetString() ?? "";
-                    string displayName = item.TryGetProperty("product", out var p) && p.ValueKind != JsonValueKind.Null ? (p.GetProperty("name").GetString() ?? "") : "";
-                    if (!string.IsNullOrEmpty(offerId)) { results.Add(new EaOffer { OfferId = offerId, DisplayName = displayName }); count++; }
+                if (doc.RootElement.TryGetProperty("data", out var data) && 
+                    data.TryGetProperty("me", out var me) && 
+                    me.TryGetProperty("ownedGameProducts", out var owned))
+                {
+                    var items = owned.GetProperty("items");
+                    int count = 0;
+                    foreach (var item in items.EnumerateArray()) {
+                        if (item.ValueKind == JsonValueKind.Null) continue;
+                        string offerId = item.GetProperty("originOfferId").GetString() ?? "";
+                        string displayName = item.TryGetProperty("product", out var p) && p.ValueKind != JsonValueKind.Null ? (p.GetProperty("name").GetString() ?? "") : "";
+                        if (!string.IsNullOrEmpty(offerId) && !results.Any(r => r.OfferId == offerId)) {
+                            results.Add(new EaOffer { OfferId = offerId, DisplayName = displayName });
+                            count++;
+                        }
+                    }
+                    
+                    var receivedNext = owned.TryGetProperty("next", out var nxt) ? nxt.GetString() : null;
+                    Log($"[Juno] Page {safetyCounter}: Found {count} items. Next Cursor: {receivedNext ?? "NULL"}. Total unique: {results.Count}");
+                    
+                    if (string.IsNullOrEmpty(receivedNext) || receivedNext == "0" || receivedNext == nextCursor)
+                        nextCursor = null;
+                    else 
+                        nextCursor = receivedNext;
                 }
-                Log($"[Juno] Vault Page: {count} items. Total so far: {results.Count}");
-                nextCursor = owned.TryGetProperty("next", out var nxt) ? nxt.GetString() : null;
-                if (nextCursor == "0") nextCursor = null;
+                else nextCursor = null;
             } catch { nextCursor = null; }
-        } while (!string.IsNullOrEmpty(nextCursor));
+        }
 
+        Log("[Juno] Exhaustive Scan Complete. Final count: {results.Count}");
         return results;
     }
 
