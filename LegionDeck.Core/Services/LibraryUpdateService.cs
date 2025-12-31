@@ -119,10 +119,28 @@ public class LibraryUpdateService
                     var merged = new List<LocalLibraryService.InstalledGame>();
                     var processedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
+                    // Helper for aggressive normalization
+                    string NormalizeName(string name)
+                    {
+                        var n = name.ToLowerInvariant()
+                            .Replace("™", "").Replace("®", "")
+                            .Replace("digital deluxe", "")
+                            .Replace("ultimate edition", "")
+                            .Replace("goty edition", "")
+                            .Replace("remastered", "")
+                            .Replace("standard edition", "")
+                            .Trim();
+                        // Remove (YYYY)
+                        n = System.Text.RegularExpressions.Regex.Replace(n, @"\(\d{4}\)", "");
+                        // Remove special chars to ensure "Dead Space" == "Dead Space:"
+                        n = new string(n.Where(c => char.IsLetterOrDigit(c)).ToArray());
+                        return n;
+                    }
+
                     // 3. Process Scraped Games (144 items)
                     foreach (var sg in allEa)
                     {
-                        var normName = sg.Name.ToLowerInvariant().Replace("™", "").Replace("®", "").Trim();
+                        var normName = NormalizeName(sg.Name); // Use the strong normalizer for matching too
                         var game = new LocalLibraryService.InstalledGame { 
                             Name = sg.Name, 
                             Source = sg.IsPro ? "EA Play Pro" : "EA Play",
@@ -132,13 +150,10 @@ public class LibraryUpdateService
 
                         // Match with Resolved Content IDs
                         string? launchId = null;
-                        if (contentIdMap.TryGetValue(normName, out var cid)) launchId = cid;
-                        else
-                        {
-                            // Fuzzy match
-                            var fuzzy = contentIdMap.Keys.FirstOrDefault(k => k.Contains(normName) || normName.Contains(k));
-                            if (fuzzy != null) launchId = contentIdMap[fuzzy];
-                        }
+                        // Try matching against contentIdMap keys (which were also normalized?)
+                        // We need to re-normalize contentIdMap keys on the fly or just fuzzy match
+                        var fuzzy = contentIdMap.FirstOrDefault(k => NormalizeName(k.Key) == normName).Value;
+                        if (fuzzy != null) launchId = fuzzy;
 
                         if (!string.IsNullOrEmpty(launchId))
                         {
@@ -147,19 +162,22 @@ public class LibraryUpdateService
                         }
                         else
                         {
-                            // Not in user's library
+                            // Not in user's library - Use Name as ID for metadata/grids
+                            game.Id = sg.Name;
                             game.Source += " (Not Redeemed)";
-                            // game.Id remains empty or scraper ID
                         }
 
                         merged.Add(game);
-                        processedNames.Add(sg.Name);
+                        processedNames.Add(normName); // Store NORMALIZED name
                     }
 
                     // 4. Add remaining Juno games that weren't in the scraper
                     foreach (var ro in resolvedOwned)
                     {
-                        if (!processedNames.Contains(ro.DisplayName))
+                        var cleanName = NormalizeName(ro.DisplayName);
+                        
+                        // Check if we already have a game that normalizes to this
+                        if (!processedNames.Contains(cleanName))
                         {
                             merged.Add(new LocalLibraryService.InstalledGame {
                                 Id = ro.ContentId,
@@ -167,6 +185,7 @@ public class LibraryUpdateService
                                 Source = "EA Play",
                                 IsInstalled = false
                             });
+                            processedNames.Add(cleanName); // Prevent internal Juno duplicates too
                         }
                     }
 

@@ -99,6 +99,18 @@ public sealed partial class LibraryPage : Page
 
             ApplyFilter(SearchBox?.Text ?? "");
 
+            // Trigger Enrichment for current view
+            var enrichmentList = _allGames.Select(g => (g.GameData.Id, g.Name, g.Source)).ToList();
+            _ = _enrichmentService.EnrichGamesBatchAsync(enrichmentList, (id, details) => {
+                this.DispatcherQueue.TryEnqueue(() => {
+                    var vm = _allGames.FirstOrDefault(g => g.GameData.Id == id);
+                    if (vm != null) {
+                        if (!string.IsNullOrEmpty(details.VerticalCover)) vm.ImgCapsule = details.VerticalCover;
+                        if (!string.IsNullOrEmpty(details.Name)) vm.Name = details.Name;
+                    }
+                });
+            });
+
             if ((_allGames.Count == 0 || forceUpdate) && !_isSyncing)
             {
                 _isSyncing = true;
@@ -110,8 +122,25 @@ public sealed partial class LibraryPage : Page
                         _libraryService.UpdateInstallationStatus(fresh, localGames);
                         this.DispatcherQueue.TryEnqueue(() => {
                             if (_currentMode == mode) {
-                                _allGames = fresh.Select(g => new LibraryGameViewModel(g)).ToList();
+                                _allGames = fresh.Select(g => {
+                                    var vm = new LibraryGameViewModel(g);
+                                    var cov = _metadataService.GetCover(g.Id);
+                                    if (!string.IsNullOrEmpty(cov)) vm.ImgCapsule = cov;
+                                    return vm;
+                                }).ToList();
                                 ApplyFilter(SearchBox?.Text ?? "");
+                                
+                                // Re-trigger Enrichment for fresh list
+                                var freshEnrichList = _allGames.Select(g => (g.GameData.Id, g.Name, g.Source)).ToList();
+                                _ = _enrichmentService.EnrichGamesBatchAsync(freshEnrichList, (id, details) => {
+                                    this.DispatcherQueue.TryEnqueue(() => {
+                                        var vm = _allGames.FirstOrDefault(g => g.GameData.Id == id);
+                                        if (vm != null) {
+                                            if (!string.IsNullOrEmpty(details.VerticalCover)) vm.ImgCapsule = details.VerticalCover;
+                                            if (!string.IsNullOrEmpty(details.Name)) vm.Name = details.Name;
+                                        }
+                                    });
+                                });
                             }
                         });
                     } finally { _isSyncing = false; this.DispatcherQueue.TryEnqueue(() => { if (LoadingRing != null) LoadingRing.IsActive = false; }); }
