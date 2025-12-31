@@ -96,26 +96,16 @@ Epic: com.epicgames.launcher://
 - Troubleshooting: If the app crashes on launch, check `%LOCALAPPDATA%\LegionDeck\startup.log`.
 
 7. Current Context / Active Task
-Status: Phase 2 Complete / Phase 3 Planning.
-Next Action: Implement Sorting/Filtering logic and investigate "Available Games" fetching.
+Status: Phase 3 In Progress.
+Next Action: Implement advanced Sorting & Filtering and UI animation polish.
 
 Roadmap Progress:
 [x] Phase 1: The Brain (CLI) - COMPLETE
-[x] Step 1: Scaffolding (Shared Core Library)
-[x] Step 2: Authentication (Moved to Core)
-[x] Step 3: Data Ingestion (Moved to Core)
-[x] Step 4: The Oracle (Moved to Core)
-[x] Step 5: Output (CLI functional and verified)
-
 [x] Phase 2: The Face (GUI) - COMPLETE
-[x] Step 1: Port logic to WinUI 3 (Self-contained, Shared Core).
-[x] Step 2: Design "Grid View" with Controller Navigation (XInput/Keyboard emulation).
-[x] Step 3: Implement "Badges" (Green for Game Pass, Red for EA).
-[x] Step 4: Subscriptions Dashboard (Visual cards + Wishlist Matches).
-[x] Step 5: Settings & Navigation Polish (Focus management, GamepadService).
 
 [ ] Phase 3: The Library (Management & Polish) - IN PROGRESS
-[ ] Step 1: Sorting & Filtering (Sort by Name, Source, Date Added).
-[ ] Step 2: "Available Games" (Fetch full library vs Installed).
-[ ] Step 3: Installation Management (Trigger installs via URI).
-[ ] Step 4: UI Transitions & Animation Polish.
+[x] Step 1: Available Games (Merged Scraper + Official API for EA Play Pro).
+[x] Step 2: Installation Management (Direct URI launching/installing via numeric Content IDs).
+[x] Step 3: Metadata Enrichment (SteamGridDB Hero/Cover art for all sources).
+[ ] Step 4: Advanced Sorting & Filtering (Sort by Source, Genre, Status).
+[ ] Step 5: UI Transitions & Animation Polish.
