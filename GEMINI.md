@@ -76,6 +76,7 @@ Phase 2: The Face (GUI)
 
 5. Key Resources & References
 Playnite Extensions Source: github.com/JosefNemec/PlayniteExtensions (Reference for Auth/Cookie logic).
+Legendary (Epic CLI): github.com/derrod/legendary (Reference for Epic Account Sync).
 
 Steam Web API: api.steampowered.com
 
@@ -96,8 +97,8 @@ Epic: com.epicgames.launcher://
 - Troubleshooting: If the app crashes on launch, check `%LOCALAPPDATA%\LegionDeck\startup.log`.
 
 7. Current Context / Active Task
-Status: Phase 4 Ready.
-Next Action: Begin Phase 4 (Handheld Customization & System Tweaks).
+Status: Preparing for Phase 3.5.
+Next Action: Refactor Launch Logic to Strategy Pattern.
 
 Roadmap Progress:
 [x] Phase 1: The Brain (CLI) - COMPLETE
@@ -109,6 +110,12 @@ Roadmap Progress:
     [x] Step 4: Advanced Ubisoft Integration (Local Cache Scraping + Master ID Mapping).
     [x] Step 5: Unified Library View (Multi-select Filters, Advanced Sorting, Deduplication).
     [x] Step 6: UX Polish (Native Gamepad Navigation, Focus Management, Metadata Caching).
+
+[ ] Phase 3.5: Expansion & Architecture (The Foundation) - NEXT
+    [ ] Step 1: Refactor Launch Logic to Strategy Pattern (ILauncherStrategy).
+    [ ] Step 2: Epic Games Account Sync (Full Library via Legendary/Playnite logic).
+    [ ] Step 3: Battle.net Integration (Installed Game Detection).
+    [ ] Step 4: Game Process Monitoring (Preparation for TDP Profiles).
 
 [ ] Phase 4: The Experience (Handheld Features) - PLANNED
     [ ] Step 1: TDP/Power Profiles (Lenovo Legion Go Integration).
