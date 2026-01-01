@@ -8,7 +8,6 @@ namespace LegionDeck.GUI
     public partial class App : Application
     {
         private Window? window;
-        public static Services.GamepadService? GamepadService { get; private set; }
 
         /// <summary>
         /// Initializes the singleton application object.  This is the first line of authored code
@@ -55,8 +54,8 @@ namespace LegionDeck.GUI
             window = new Window();
             window.Title = "LegionDeck";
             
-            // Initialize Gamepad Service for Input Mapping
-            GamepadService = new Services.GamepadService();
+            // Initialize Gamepad Service singleton
+            new Services.GamepadService();
 
             Frame rootFrame = new Frame();
             rootFrame.NavigationFailed += OnNavigationFailed;

@@ -22,7 +22,6 @@ public sealed partial class LibraryPage : Page
     private readonly ConfigService _configService;
     private readonly SteamLibraryService _steamLibraryService;
     private readonly LibraryCacheService _cacheService = new();
-    private string _currentMode = "";
     private bool _isDataLoaded = false;
     private bool _isReturning = false;
     private bool _isSyncing = false;
@@ -39,14 +38,6 @@ public sealed partial class LibraryPage : Page
         _enrichmentService = new GameEnrichmentService(_configService, _metadataService);
         LibraryGridView.ItemsSource = InstalledGames;
         this.Loaded += LibraryPage_Loaded;
-    }
-
-    private async void ViewMode_SelectionChanged(object sender, SelectionChangedEventArgs e)
-    {
-        if (_isReturning) return;
-        string newMode = (ViewModeCombo?.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "Installed";
-        if (newMode == _currentMode && _isDataLoaded) return;
-        await RefreshLibraryAsync(forceUpdate: false);
     }
 
     protected override void OnNavigatedTo(Microsoft.UI.Xaml.Navigation.NavigationEventArgs e)
@@ -72,6 +63,11 @@ public sealed partial class LibraryPage : Page
         await RefreshLibraryAsync(forceUpdate: true);
     }
 
+    private void Filter_Click(object sender, RoutedEventArgs e)
+    {
+        ApplyAdvancedFilters();
+    }
+
     private async Task RefreshLibraryAsync(bool forceUpdate = false)
     {
         if (!await _refreshSemaphore.WaitAsync(0)) return;
@@ -80,28 +76,87 @@ public sealed partial class LibraryPage : Page
             _enrichmentCts?.Cancel();
             _enrichmentCts = new System.Threading.CancellationTokenSource();
             
-            string mode = (ViewModeCombo?.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "Installed";
-            _currentMode = mode;
-            Log($"Refresh: Mode={mode}, Force={forceUpdate}");
-
             if (LoadingRing != null) LoadingRing.IsActive = true;
 
+            // 1. Get Local (Installed)
             var localGames = await _libraryService.GetInstalledGamesAsync();
-            var list = (mode == "Installed") ? localGames : await _cacheService.LoadLibraryAsync(mode);
-            _libraryService.UpdateInstallationStatus(list, localGames);
+            
+            // 2. Load Caches (All Sources) if not forcing update, otherwise we sync first
+            if (forceUpdate)
+            {
+                _isSyncing = true;
+                await Task.Run(async () => {
+                    var updater = new LibraryUpdateService();
+                    await updater.UpdateAllAsync(); // Syncs all clouds
+                });
+                _isSyncing = false;
+            }
 
-            _allGames = list.Select(g => {
+            var steamGames = await _cacheService.LoadLibraryAsync("Steam");
+            var xboxGames = await _cacheService.LoadLibraryAsync("Xbox");
+            var ubiGames = await _cacheService.LoadLibraryAsync("Ubisoft");
+            var eaGames = await _cacheService.LoadLibraryAsync("EA");
+            var epicGames = await _cacheService.LoadLibraryAsync("Epic");
+
+            // 3. Merge
+            // We use a dictionary to merge duplicates (e.g. Installed vs Cloud version of same game)
+            // Priority: Installed > Cloud
+            var merged = new Dictionary<string, LocalLibraryService.InstalledGame>();
+
+            void MergeList(List<LocalLibraryService.InstalledGame> list)
+            {
+                foreach (var g in list)
+                {
+                    // Standard Key: Source + ID
+                    var key = $"{g.Source}_{g.Id}";
+                    
+                    // Special handling for Xbox duplicates (Game Pass vs Installed often have different IDs)
+                    if (g.Source == "Xbox")
+                    {
+                        var existingXbox = merged.Values.FirstOrDefault(x => x.Source == "Xbox" && x.Name.Equals(g.Name, StringComparison.OrdinalIgnoreCase));
+                        if (existingXbox != null)
+                        {
+                            // If we found a name match, use its key to merge/overwrite
+                            key = $"{existingXbox.Source}_{existingXbox.Id}";
+                        }
+                    }
+
+                    if (!merged.ContainsKey(key))
+                    {
+                        merged[key] = g;
+                    }
+                    else if (g.IsInstalled) 
+                    {
+                        // If we found an installed version, overwrite the cloud one
+                        merged[key] = g; 
+                    }
+                }
+            }
+
+            _libraryService.UpdateInstallationStatus(steamGames, localGames);
+            _libraryService.UpdateInstallationStatus(xboxGames, localGames);
+            _libraryService.UpdateInstallationStatus(ubiGames, localGames);
+            _libraryService.UpdateInstallationStatus(eaGames, localGames);
+            _libraryService.UpdateInstallationStatus(epicGames, localGames);
+
+            MergeList(localGames);
+            MergeList(steamGames);
+            MergeList(xboxGames);
+            MergeList(ubiGames);
+            MergeList(eaGames);
+            MergeList(epicGames);
+
+            _allGames = merged.Values.Select(g => {
                 var vm = new LibraryGameViewModel(g);
                 var cov = _metadataService.GetCover(g.Id);
                 if (!string.IsNullOrEmpty(cov)) vm.ImgCapsule = cov;
                 return vm;
             }).ToList();
 
-            ApplyFilter(SearchBox?.Text ?? "");
+            ApplyAdvancedFilters();
 
-            // Trigger Enrichment for current view
-            var enrichmentList = _allGames.Select(g => (g.GameData.Id, g.Name, g.Source)).ToList();
-            _ = _enrichmentService.EnrichGamesBatchAsync(enrichmentList, (id, details) => {
+            // Enrich visible games
+            _ = _enrichmentService.EnrichGamesBatchAsync(_allGames.Select(g => (g.GameData.Id, g.Name, g.Source)).ToList(), (id, details) => {
                 this.DispatcherQueue.TryEnqueue(() => {
                     var vm = _allGames.FirstOrDefault(g => g.GameData.Id == id);
                     if (vm != null) {
@@ -109,81 +164,116 @@ public sealed partial class LibraryPage : Page
                         if (!string.IsNullOrEmpty(details.Name)) vm.Name = details.Name;
                     }
                 });
-            });
+            }, _enrichmentCts.Token);
 
-            if ((_allGames.Count == 0 || forceUpdate) && !_isSyncing)
-            {
-                _isSyncing = true;
-                _ = Task.Run(async () => {
-                    try {
-                        var updater = new LibraryUpdateService();
-                        await updater.UpdateAllAsync(mode);
-                        var fresh = await _cacheService.LoadLibraryAsync(mode);
-                        _libraryService.UpdateInstallationStatus(fresh, localGames);
-                        this.DispatcherQueue.TryEnqueue(() => {
-                            if (_currentMode == mode) {
-                                _allGames = fresh.Select(g => {
-                                    var vm = new LibraryGameViewModel(g);
-                                    var cov = _metadataService.GetCover(g.Id);
-                                    if (!string.IsNullOrEmpty(cov)) vm.ImgCapsule = cov;
-                                    return vm;
-                                }).ToList();
-                                ApplyFilter(SearchBox?.Text ?? "");
-                                
-                                // Re-trigger Enrichment for fresh list
-                                var freshEnrichList = _allGames.Select(g => (g.GameData.Id, g.Name, g.Source)).ToList();
-                                _ = _enrichmentService.EnrichGamesBatchAsync(freshEnrichList, (id, details) => {
-                                    this.DispatcherQueue.TryEnqueue(() => {
-                                        var vm = _allGames.FirstOrDefault(g => g.GameData.Id == id);
-                                        if (vm != null) {
-                                            if (!string.IsNullOrEmpty(details.VerticalCover)) vm.ImgCapsule = details.VerticalCover;
-                                            if (!string.IsNullOrEmpty(details.Name)) vm.Name = details.Name;
-                                        }
-                                    });
-                                });
-                            }
-                        });
-                    } finally { _isSyncing = false; this.DispatcherQueue.TryEnqueue(() => { if (LoadingRing != null) LoadingRing.IsActive = false; }); }
-                });
-            }
             _isDataLoaded = true;
-        } finally { _refreshSemaphore.Release(); if (!_isSyncing && LoadingRing != null) LoadingRing.IsActive = false; }
+        } 
+        finally 
+        { 
+            _refreshSemaphore.Release(); 
+            if (!_isSyncing && LoadingRing != null) LoadingRing.IsActive = false; 
+        } 
+    }
+
+    private void ApplyAdvancedFilters()
+    {
+        if (_allGames == null) return;
+
+        bool showInstalled = IsFilterChecked("Filter_Installed");
+        bool showCloud = IsFilterChecked("Filter_Cloud");
+        
+        bool sourceSteam = IsFilterChecked("Source_Steam");
+        bool sourceXbox = IsFilterChecked("Source_Xbox");
+        bool sourceUbi = IsFilterChecked("Source_Ubisoft");
+        bool sourceEA = IsFilterChecked("Source_EA");
+        bool sourceEpic = IsFilterChecked("Source_Epic");
+
+        bool stateClaimed = IsFilterChecked("State_Claimed");
+        bool stateUnclaimed = IsFilterChecked("State_Unclaimed");
+
+        var filtered = _allGames.Where(g =>
+        {
+            // Status Filter
+            bool statusMatch = (showInstalled && g.IsInstalled) || (showCloud && !g.IsInstalled);
+            if (!showInstalled && !showCloud) statusMatch = true;
+
+            // Source Filter
+            bool sourceMatch = false;
+            if (sourceSteam && g.Source.Contains("Steam")) sourceMatch = true;
+            if (sourceXbox && g.Source.Contains("Xbox")) sourceMatch = true;
+            if (sourceUbi && g.Source.Contains("Ubisoft")) sourceMatch = true;
+            if (sourceEA && (g.Source.Contains("EA") || g.Source.Contains("Electronic Arts"))) sourceMatch = true;
+            if (sourceEpic && g.Source.Contains("Epic")) sourceMatch = true;
+            
+            if (!sourceSteam && !sourceXbox && !sourceUbi && !sourceEA && !sourceEpic) sourceMatch = true;
+
+            // Ownership Filter
+            bool ownerMatch = false;
+            if (stateClaimed && !g.IsNotRedeemed) ownerMatch = true;
+            if (stateUnclaimed && g.IsNotRedeemed) ownerMatch = true;
+            if (!stateClaimed && !stateUnclaimed) ownerMatch = true;
+
+            bool textMatch = string.IsNullOrWhiteSpace(SearchBox?.Text) || g.Name.Contains(SearchBox.Text, StringComparison.OrdinalIgnoreCase);
+            bool notHidden = !_metadataService.IsHidden(g.GameData.Id);
+
+            return statusMatch && sourceMatch && ownerMatch && textMatch && notHidden;
+        });
+
+        InstalledGames.Clear();
+        foreach (var vm in filtered)
+        {
+            InstalledGames.Add(vm);
+        }
+
+        if (NoGamesText != null) NoGamesText.Visibility = InstalledGames.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private bool IsFilterChecked(string tag)
+    {
+        if (this.Content is Grid g && g.Children.Count > 1 && g.Children[1] is ScrollViewer sv && sv.Content is StackPanel sp)
+        {
+            foreach(var child in sp.Children)
+            {
+                if (child is Microsoft.UI.Xaml.Controls.Primitives.ToggleButton tb && tb.Tag?.ToString() == tag)
+                {
+                    return tb.IsChecked ?? false;
+                }
+            }
+        }
+        return false;
     }
 
     private void SortByName_Click(object sender, RoutedEventArgs e) {
         bool asc = (sender as MenuFlyoutItem)?.Tag?.ToString() == "NameAsc";
         _allGames = asc ? _allGames.OrderBy(g => g.Name).ToList() : _allGames.OrderByDescending(g => g.Name).ToList();
-        ApplyFilter(SearchBox?.Text ?? "");
+        ApplyAdvancedFilters(); // Re-apply filter to update view
     }
 
     private void SortBySource_Click(object sender, RoutedEventArgs e) {
         _allGames = _allGames.OrderBy(g => g.Source).ThenBy(g => g.Name).ToList();
-        ApplyFilter(SearchBox?.Text ?? "");
+        ApplyAdvancedFilters();
     }
 
-    private void ApplyFilter(string filter)
-    {
-        InstalledGames.Clear();
-        var filtered = string.IsNullOrWhiteSpace(filter) ? _allGames : _allGames.Where(g => g.Name.Contains(filter, StringComparison.OrdinalIgnoreCase));
-        foreach (var vm in filtered) {
-            if (!_metadataService.IsHidden(vm.GameData.Id)) InstalledGames.Add(vm);
-        }
-        if (NoGamesText != null) NoGamesText.Visibility = InstalledGames.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
-    }
-
-    private void SearchBox_TextChanged(AutoSuggestBox sender, AutoSuggestBoxTextChangedEventArgs args) { if (args.Reason == AutoSuggestionBoxTextChangeReason.UserInput) ApplyFilter(sender.Text); }
+    private void SearchBox_TextChanged(AutoSuggestBox sender, AutoSuggestBoxTextChangedEventArgs args) { if (args.Reason == AutoSuggestionBoxTextChangeReason.UserInput) ApplyAdvancedFilters(); }
     private async void LibraryGridView_ItemClick(object sender, ItemClickEventArgs e) { if (e.ClickedItem is LibraryGameViewModel vm) this.Frame.Navigate(typeof(GameDetailsPage), vm); }
     
-    private void SearchBox_QuerySubmitted(AutoSuggestBox sender, AutoSuggestBoxQuerySubmittedEventArgs args) { ApplyFilter(sender.Text); }
+    private void SearchBox_QuerySubmitted(AutoSuggestBox sender, AutoSuggestBoxQuerySubmittedEventArgs args) { ApplyAdvancedFilters(); }
     
     private void LibraryGridView_GettingFocus(UIElement sender, Microsoft.UI.Xaml.Input.GettingFocusEventArgs args)
     {
         if (args.NewFocusedElement == LibraryGridView && LibraryGridView.Items.Count > 0)
         {
+            // If index is -1, select 0. If it has a value, it keeps it (but we clear it on LostFocus now)
             if (LibraryGridView.SelectedIndex < 0) LibraryGridView.SelectedIndex = 0;
             var container = LibraryGridView.ContainerFromIndex(LibraryGridView.SelectedIndex) as Control;
             if (container != null) { args.TrySetNewFocusedElement(container); args.Handled = true; }
         }
+    }
+
+    private void LibraryGridView_LostFocus(object sender, RoutedEventArgs e)
+    {
+        // Clear selection so when we come back, we start fresh (usually top-left due to GettingFocus logic)
+        LibraryGridView.SelectedIndex = -1;
     }
 
     private async void LibraryGridView_PreviewKeyDown(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs e)
@@ -224,6 +314,12 @@ public sealed partial class LibraryPage : Page
         }
     }
 
+    private void UpdateGameCover(LibraryGameViewModel game, string url)
+    {
+        _metadataService.SetCover(game.GameData.Id, url);
+        this.DispatcherQueue.TryEnqueue(() => { game.ImgCapsule = url; });
+    }
+
     private void HideGame_Click(object sender, RoutedEventArgs e)
     {
         if (sender is MenuFlyoutItem item && item.DataContext is LibraryGameViewModel vm)
@@ -234,10 +330,26 @@ public sealed partial class LibraryPage : Page
         }
     }
 
-    private void UpdateGameCover(LibraryGameViewModel game, string url)
+    public void FocusGameGrid()
     {
-        _metadataService.SetCover(game.GameData.Id, url);
-        this.DispatcherQueue.TryEnqueue(() => { game.ImgCapsule = url; });
+        this.DispatcherQueue.TryEnqueue(() => 
+        {
+            if (LibraryGridView.Items.Count > 0)
+            {
+                // If nothing selected, select first
+                if (LibraryGridView.SelectedIndex < 0) LibraryGridView.SelectedIndex = 0;
+                
+                var container = LibraryGridView.ContainerFromIndex(LibraryGridView.SelectedIndex) as Control;
+                container?.Focus(FocusState.Programmatic);
+            }
+            else
+            {
+                // If empty, focus the filter bar
+                // We need to find the first button in the filter bar.
+                // For now, focus the page itself so D-Pad can move to filters.
+                this.Focus(FocusState.Programmatic);
+            }
+        });
     }
 
     private void Log(string message) {

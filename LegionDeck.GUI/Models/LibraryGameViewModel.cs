@@ -39,7 +39,8 @@ public class LibraryGameViewModel : INotifyPropertyChanged
 
     public string Source => GameData.Source;
     public bool IsInstalled => GameData.IsInstalled;
-    public bool IsNotRedeemed => Source.Contains("(Not Redeemed)", StringComparison.OrdinalIgnoreCase);
+    public bool IsNotRedeemed => Source.Contains("(Not Redeemed)", StringComparison.OrdinalIgnoreCase) || 
+                                 Source.Contains("(Unclaimed)", StringComparison.OrdinalIgnoreCase);
 
     public string StatusText 
     {

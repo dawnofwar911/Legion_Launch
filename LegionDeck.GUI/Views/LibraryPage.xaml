@@ -14,19 +14,9 @@
         <models:StatusColorConverter x:Key="StatusColorConverter" />
     </Page.Resources>
 
-    <Grid RowDefinitions="Auto,*" XYFocusKeyboardNavigation="Enabled">
+    <Grid RowDefinitions="Auto,Auto,*" XYFocusKeyboardNavigation="Enabled">
         <CommandBar Grid.Row="0" DefaultLabelPosition="Right">
-            <AppBarButton Icon="Refresh" Label="Scan Library" Click="RefreshButton_Click" />
-            <AppBarSeparator />
-            <AppBarElementContainer>
-                <ComboBox x:Name="ViewModeCombo" SelectionChanged="ViewMode_SelectionChanged" Width="150" VerticalAlignment="Center" Margin="0,0,8,0">
-                    <ComboBoxItem Content="Installed" Tag="Installed" IsSelected="True" />
-                    <ComboBoxItem Content="Steam Library" Tag="Steam" />
-                    <ComboBoxItem Content="Xbox / Game Pass" Tag="Xbox" />
-                    <ComboBoxItem Content="Ubisoft+ Library" Tag="Ubisoft" />
-                    <ComboBoxItem Content="EA Play Library" Tag="EA" />
-                </ComboBox>
-            </AppBarElementContainer>
+            <AppBarButton Icon="Refresh" Label="Sync All" Click="RefreshButton_Click" />
             <AppBarSeparator />
             <AppBarButton Icon="Sort" Label="Sort">
                 <AppBarButton.Flyout>
@@ -49,7 +39,33 @@
             </CommandBar.Content>
         </CommandBar>
 
-        <GridView Grid.Row="1"
+        <!-- Filter Chips Bar -->
+        <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Disabled" Margin="12,0,12,12">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <TextBlock Text="Filters:" VerticalAlignment="Center" FontWeight="Bold" Margin="0,0,8,0" Opacity="0.6"/>
+                
+                <!-- Status Filters -->
+                <ToggleButton Content="Installed" Tag="Filter_Installed" Click="Filter_Click" IsChecked="True" />
+                <ToggleButton Content="Not Installed" Tag="Filter_Cloud" Click="Filter_Click" />
+                
+                <Rectangle Width="1" Height="24" Fill="{ThemeResource SystemControlForegroundBaseMediumLowBrush}" Margin="4,0" />
+                
+                <!-- Source Filters -->
+                <ToggleButton Content="Steam" Tag="Source_Steam" Click="Filter_Click" />
+                <ToggleButton Content="Xbox" Tag="Source_Xbox" Click="Filter_Click" />
+                <ToggleButton Content="Ubisoft" Tag="Source_Ubisoft" Click="Filter_Click" />
+                <ToggleButton Content="EA" Tag="Source_EA" Click="Filter_Click" />
+                <ToggleButton Content="Epic" Tag="Source_Epic" Click="Filter_Click" />
+
+                <Rectangle Width="1" Height="24" Fill="{ThemeResource SystemControlForegroundBaseMediumLowBrush}" Margin="4,0" />
+
+                <!-- Ownership Filters -->
+                <ToggleButton Content="Claimed" Tag="State_Claimed" Click="Filter_Click" />
+                <ToggleButton Content="Unclaimed (Sub)" Tag="State_Unclaimed" Click="Filter_Click" />
+            </StackPanel>
+        </ScrollViewer>
+
+        <GridView Grid.Row="2"
                   x:Name="LibraryGridView"
                   Margin="12"
                   Padding="0,0,0,24"
@@ -57,15 +73,11 @@
                   IsItemClickEnabled="True"
                   ItemClick="LibraryGridView_ItemClick"
                   XYFocusKeyboardNavigation="Enabled"
-                  XYFocusUpNavigationStrategy="NavigationDirectionDistance"
-                  XYFocusDownNavigationStrategy="NavigationDirectionDistance"
-                  XYFocusLeftNavigationStrategy="NavigationDirectionDistance"
-                  XYFocusRightNavigationStrategy="NavigationDirectionDistance"
                   IsTabStop="True"
                   UseSystemFocusVisuals="True"
-                  IsFocusEngagementEnabled="True"
                   TabFocusNavigation="Cycle"
                   PreviewKeyDown="LibraryGridView_PreviewKeyDown"
+                  LostFocus="LibraryGridView_LostFocus"
                   GettingFocus="LibraryGridView_GettingFocus">
             <GridView.ItemTemplate>
                 <DataTemplate x:DataType="models:LibraryGameViewModel">
@@ -107,10 +119,10 @@
             </GridView.ItemTemplate>
         </GridView>
 
-        <TextBlock x:Name="NoGamesText" Grid.Row="1" Text="No games found. Check your filters or Settings." 
+        <TextBlock x:Name="NoGamesText" Grid.Row="2" Text="No games found. Adjust filters." 
                    HorizontalAlignment="Center" VerticalAlignment="Center" 
                    Opacity="0.5" Visibility="Collapsed" Style="{ThemeResource SubtitleTextBlockStyle}" />
         
-        <ProgressRing x:Name="LoadingRing" Grid.Row="1" IsActive="False" Width="60" Height="60" />
+        <ProgressRing x:Name="LoadingRing" Grid.Row="2" IsActive="False" Width="60" Height="60" />
     </Grid>
 </Page>

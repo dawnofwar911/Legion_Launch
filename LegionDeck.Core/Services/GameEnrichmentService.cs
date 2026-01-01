@@ -26,7 +26,8 @@ public class GameEnrichmentService
 
     public async Task<Dictionary<string, SteamStoreService.SteamStoreDetails>> EnrichGamesBatchAsync(
         List<(string Id, string Name, string Source)> games,
-        Action<string, SteamStoreService.SteamStoreDetails>? onGameUpdated = null)
+        Action<string, SteamStoreService.SteamStoreDetails>? onGameUpdated = null,
+        CancellationToken cancellationToken = default)
     {
         var updatedDetails = new Dictionary<string, SteamStoreService.SteamStoreDetails>();
         
@@ -43,10 +44,14 @@ public class GameEnrichmentService
 
         for (int i = 0; i < games.Count; i++)
         {
+            if (cancellationToken.IsCancellationRequested) break;
+
             var game = games[i];
             
             batchTasks.Add(Task.Run(async () =>
             {
+                if (cancellationToken.IsCancellationRequested) return;
+
                 var idStr = game.Id;
                 int.TryParse(idStr, out int appId); // 0 for non-Steam usually
 

@@ -36,13 +36,8 @@
                   IsItemClickEnabled="True"
                   ItemClick="WishlistGridView_ItemClick"
                   XYFocusKeyboardNavigation="Enabled"
-                  XYFocusUpNavigationStrategy="NavigationDirectionDistance"
-                  XYFocusDownNavigationStrategy="NavigationDirectionDistance"
-                  XYFocusLeftNavigationStrategy="NavigationDirectionDistance"
-                  XYFocusRightNavigationStrategy="NavigationDirectionDistance"
                   IsTabStop="True"
                   UseSystemFocusVisuals="True"
-                  IsFocusEngagementEnabled="True"
                   TabFocusNavigation="Cycle"
                   KeyDown="WishlistGridView_KeyDown"
                   GettingFocus="WishlistGridView_GettingFocus">
