@@ -72,7 +72,14 @@ public class LibraryUpdateService
                 try
                 {
                     var items = await _subService.GetUbisoftPlusGamesAsync();
-                    var list = items.Select(i => new LocalLibraryService.InstalledGame { Id = i.Name, Name = i.Name, Source = "Ubisoft", IsInstalled = false }).ToList();
+                    var list = items.Select(i => new LocalLibraryService.InstalledGame { 
+                        Id = !string.IsNullOrEmpty(i.SteamAppId) ? i.SteamAppId : i.Name, 
+                        Name = i.Name, 
+                        Source = i.Type == "InCache" ? "Ubisoft" : "Ubisoft+ (Unclaimed)", 
+                        IsInstalled = false,
+                        BackgroundImage = i.ImgCapsule,
+                        LaunchUri = i.Type == "InCache" ? $"INSTALL:{i.PlainIds.FirstOrDefault()}" : "OPEN_APP"
+                    }).ToList();
                     _localService.UpdateInstallationStatus(list, localGames);
                     await _cacheService.SaveLibraryAsync("Ubisoft", list);
                 } catch (Exception ex) { Log($"Ubisoft Sync Error: {ex.Message}"); }

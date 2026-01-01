@@ -189,17 +189,208 @@ public class SubscriptionLibraryService
     public async Task<List<SteamWishlistItem>> GetUbisoftPlusGamesAsync()
     {
         var games = new List<SteamWishlistItem>();
-        var url = "https://store.ubisoft.com/uk/ubisoftplus/games";
         try
         {
-            var response = await _httpClient.GetStringAsync(url);
-            var matches = Regex.Matches(response, "data-game-title=\"(.*?)\"");
-            foreach (Match match in matches)
+            var localService = new UbisoftLocalService();
+            var masterIdService = new UbisoftMasterIdService();
+            var ownedIds = localService.GetOwnedUplayIds();
+            LogToStartup($"Detected {ownedIds.Count} unique IDs in local Ubisoft cache.");
+
+            var appId = "XELY3U4LOD";
+            var apiKey = "5638539fd9edb8f2c6b024b49ec375bd";
+            var indexName = "production__uk_ubisoft__products__en_GB__best_sellers";
+            var url = $"https://{appId}-dsn.algolia.net/1/indexes/{indexName}/query";
+
+            int page = 0;
+            int totalPages = 1;
+
+            while (page < totalPages)
             {
-                var title = match.Groups[1].Value;
-                if (!games.Any(g => g.Name == title)) games.Add(new SteamWishlistItem { Name = title });
+                var requestBody = new
+                {
+                    @params = $"filters=partOfUbisoftPlus=1&hitsPerPage=50&page={page}"
+                };
+
+                var request = new HttpRequestMessage(HttpMethod.Post, url);
+                request.Headers.Add("X-Algolia-API-Key", apiKey);
+                request.Headers.Add("X-Algolia-Application-Id", appId);
+                request.Content = new StringContent(JsonSerializer.Serialize(requestBody), System.Text.Encoding.UTF8, "application/json");
+
+                var response = await _httpClient.SendAsync(request);
+                var json = await response.Content.ReadAsStringAsync();
+                
+                using var doc = JsonDocument.Parse(json);
+                if (doc.RootElement.TryGetProperty("nbPages", out var nbPagesProp))
+                {
+                    totalPages = nbPagesProp.GetInt32();
+                }
+
+                if (doc.RootElement.TryGetProperty("hits", out var hits))
+                {
+                    foreach (var hit in hits.EnumerateArray())
+                    {
+                        // Check platform availability
+                        bool isPc = false;
+                        if (hit.TryGetProperty("platforms_availability", out var platProp))
+                        {
+                            var platString = platProp.GetString();
+                            if (!string.IsNullOrEmpty(platString) && platString.Contains("PC (Digital)", StringComparison.OrdinalIgnoreCase))
+                            {
+                                isPc = true;
+                            }
+                        }
+                        
+                        // Fallback: check "Platform" field
+                        if (!isPc && hit.TryGetProperty("Platform", out var pProp))
+                        {
+                            var p = pProp.GetString();
+                            if (!string.IsNullOrEmpty(p) && p.Contains("PC", StringComparison.OrdinalIgnoreCase)) isPc = true;
+                        }
+
+                        if (!isPc) continue;
+
+                                                string name = hit.GetProperty("title").GetString() ?? "";
+                                                string storeId = hit.GetProperty("id").GetString() ?? ""; // Hex Store ID
+                                                string launcherId = "";
+                                                string image = "";
+                                                string storeLink = "";
+                        
+                                                // Extract Uplay ID (Launcher ID)
+                                                if (hit.TryGetProperty("productLauncherIDString", out var pidProp))
+                                                {
+                                                    launcherId = pidProp.GetString() ?? "";
+                                                }
+                                                
+                                                // Extract Image
+                                                if (hit.TryGetProperty("image_link", out var imgProp))
+                                                {
+                                                    image = imgProp.GetString() ?? "";
+                                                }
+                        
+                                                // Extract Store Link
+                                                if (hit.TryGetProperty("link", out var linkProp))
+                                                {
+                                                    storeLink = linkProp.GetString() ?? "";
+                                                }
+                        
+                                                                                                if (!string.IsNullOrEmpty(name))
+                        
+                                                                                                {
+                        
+                                                                                                    // 1. Check the Master ID database (Highest priority for uninstalled games)
+                        
+                                                                                                    // This ensures For Honor uses 569 and Valhalla uses 13504
+                        
+                                                                                                    var verifiedLid = masterIdService.GetMasterId(name);
+                        
+                                                                                                    bool isMasterMatch = verifiedLid.HasValue;
+                        
+                                                                        
+                        
+                                                                                                                                // 2. If not in Master List, try to find it in local account cache (by name match)
+                        
+                                                                        
+                        
+                                                                                                                                if (!verifiedLid.HasValue)
+                        
+                                                                        
+                        
+                                                                                                                                {
+                        
+                                                                        
+                        
+                                                                                                                                    verifiedLid = localService.GetUplayIdByGameName(name);
+                        
+                                                                        
+                        
+                                                                                                                                }
+                        
+                                                                        
+                        
+                                                                                                    
+                        
+                                                                        
+                        
+                                                                                                                                bool isInLocalCache = false;
+                        
+                                                                        
+                        
+                                                                                                                                
+                        
+                                                                        
+                        
+                                                                                                                                // Check Master ID
+                        
+                                                                        
+                        
+                                                                                                                                if (verifiedLid.HasValue && ownedIds.Contains(verifiedLid.Value)) isInLocalCache = true;
+                        
+                                                                        
+                        
+                                                                                                                                
+                        
+                                                                        
+                        
+                                                                                                                                // Check Launcher ID from Store (fallback)
+                        
+                                                                        
+                        
+                                                                                                                                if (!isInLocalCache && !string.IsNullOrEmpty(launcherId) && uint.TryParse(launcherId, out var lid) && ownedIds.Contains(lid)) isInLocalCache = true;
+                        
+                                                                        
+                        
+                                                                                                    
+                        
+                                                                        
+                        
+                                                                                                                                string finalLid = verifiedLid?.ToString() ?? launcherId;
+                        
+                                                                        
+                        
+                                                                                                    var existing = games.FirstOrDefault(g => g.Name == name);
+                        
+                                                                                                    if (existing == null)
+                        
+                                                                                                    {
+                        
+                                                                                                        var item = new SteamWishlistItem 
+                        
+                                                                                                        { 
+                        
+                                                                                                            Name = name, 
+                        
+                                                                                                            SteamAppId = storeId, 
+                        
+                                                                                                            ImgCapsule = image,
+                        
+                                                                                                            Type = isInLocalCache ? "InCache" : (verifiedLid.HasValue ? "Master" : "Store"),
+                        
+                                                                                                            ReleaseDate = storeLink
+                        
+                                                                                                        };
+                        
+                                                                                                        if (!string.IsNullOrEmpty(finalLid)) item.PlainIds.Add(finalLid);
+                        
+                                                                                                        games.Add(item);
+                        
+                                                                                                    }                                                    else if (string.IsNullOrEmpty(existing.SteamAppId) && !string.IsNullOrEmpty(storeId))
+                                                    {
+                                                        existing.SteamAppId = storeId;
+                                                        existing.ReleaseDate = storeLink;
+                                                        if (isInLocalCache) existing.Type = "InCache";
+                                                        if (!string.IsNullOrEmpty(finalLid) && !existing.PlainIds.Contains(finalLid)) 
+                                                            existing.PlainIds.Add(finalLid);
+                                                    }
+                                                }                    }
+                }
+                page++;
             }
-        } catch { }
+            LogToStartup($"Ubisoft Sync: Fetched {games.Count} titles via Algolia.");
+        } 
+        catch (Exception ex) 
+        { 
+            LogToStartup($"Ubisoft Sync Error: {ex.Message}");
+        }
         return games;
     }
 }

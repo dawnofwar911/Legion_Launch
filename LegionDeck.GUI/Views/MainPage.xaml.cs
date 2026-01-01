@@ -3,6 +3,8 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Navigation;
 using System;
 using System.Linq;
+using LegionDeck.GUI.Services;
+using System.IO;
 
 namespace LegionDeck.GUI.Views;
 
@@ -11,7 +13,20 @@ public sealed partial class MainPage : Page
     public MainPage()
     {
         this.InitializeComponent();
-        ContentFrame.Navigated += ContentFrame_Navigated;
+        Log("--- GUI BUILD VERSION 999 STARTED ---");
+        this.Loaded += NavView_Loaded;
+    }
+
+    private void Log(string message)
+    {
+        try
+        {
+            var logDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LegionDeck");
+            Directory.CreateDirectory(logDir);
+            var path = Path.Combine(logDir, "startup.log");
+            File.AppendAllText(path, $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - [MainPage] {message}\n");
+        }
+        catch { }
     }
 
     private void ContentFrame_Navigated(object sender, NavigationEventArgs e)

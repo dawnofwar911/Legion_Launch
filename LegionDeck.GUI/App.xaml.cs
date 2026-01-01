@@ -14,12 +14,11 @@ namespace LegionDeck.GUI
         /// Initializes the singleton application object.  This is the first line of authored code
         /// executed, and as such is the logical equivalent of main() or WinMain().
         /// </summary>
-        public App()
-        {
-            this.InitializeComponent();
-            this.UnhandledException += App_UnhandledException;
-            Log("App Constructor started");
-        }
+    public App()
+    {
+        this.InitializeComponent();
+        System.IO.File.AppendAllText(System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LegionDeck", "startup.log"), $"--- APP START {DateTime.Now} ---\n");
+    }
 
         private void App_UnhandledException(object sender, Microsoft.UI.Xaml.UnhandledExceptionEventArgs e)
         {

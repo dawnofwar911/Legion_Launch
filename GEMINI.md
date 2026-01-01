@@ -97,7 +97,7 @@ Epic: com.epicgames.launcher://
 
 7. Current Context / Active Task
 Status: Phase 3 In Progress.
-Next Action: Implement advanced Sorting & Filtering and UI animation polish.
+Next Action: Finalize UI animation polish and transition to Phase 4 (Handheld Customization).
 
 Roadmap Progress:
 [x] Phase 1: The Brain (CLI) - COMPLETE
@@ -107,5 +107,6 @@ Roadmap Progress:
 [x] Step 1: Available Games (Merged Scraper + Official API for EA Play Pro).
 [x] Step 2: Installation Management (Direct URI launching/installing via numeric Content IDs).
 [x] Step 3: Metadata Enrichment (SteamGridDB Hero/Cover art for all sources).
-[ ] Step 4: Advanced Sorting & Filtering (Sort by Source, Genre, Status).
-[ ] Step 5: UI Transitions & Animation Polish.
+[x] Step 4: Advanced Ubisoft Integration (Local Cache Scraping + Master ID Mapping for Ubisoft+).
+[ ] Step 5: Advanced Sorting & Filtering (Sort by Source, Genre, Status).
+[ ] Step 6: UI Transitions & Animation Polish.

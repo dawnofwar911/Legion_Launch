@@ -25,22 +25,18 @@ public class LocalLibraryService
 
     public async Task LaunchGameAsync(InstalledGame game)
     {
-        Log($"LaunchGameAsync CALLED for {game.Name} (ID: {game.Id}, Source: {game.Source}, Installed: {game.IsInstalled})");
-        string? uri = game.LaunchUri;
+        Log("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+        Log($"!!! UNIQUE LAUNCH START: {game.Name} !!!");
+        Log("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+        Log("--- [UBI_FINAL_TEST] ---");
+        string? uri = null;
         
         // If not installed, trigger the INSTALL URI
         if (!game.IsInstalled)
         {
             if (game.Source != null && game.Source.StartsWith("EA", StringComparison.OrdinalIgnoreCase))
             {
-                // Hardcoded fix for Veilguard
-                string slug = game.Name.ToLowerInvariant().Replace(" ", "-").Replace(":", "").Replace("'", "").Replace("™", "").Replace("®", "").Replace(".", "").Replace("!", "");
-                if (slug.Contains("veilguard") || game.Id == "Origin.OFR.50.0005599")
-                {
-                    Log($"[EA] Applying verified Content ID for Veilguard.");
-                    game.Id = "197044";
-                }
-
+                // ... (EA logic)
                 if (string.IsNullOrEmpty(game.Id) || game.Id.StartsWith("Origin.OFR"))
                 {
                     Log($"[EA] No numeric Content ID found for {game.Name} (ID: {game.Id}). Opening Library.");
@@ -51,34 +47,65 @@ public class LocalLibraryService
                     uri = BuildEaUri(game);
                 }
             }
+            else if (game.Source != null && game.Source.StartsWith("Ubisoft", StringComparison.OrdinalIgnoreCase))
+            {
+                bool isNumeric = long.TryParse(game.Id, out _);
+
+                if (game.LaunchUri != null && game.LaunchUri.StartsWith("INSTALL:"))
+                {
+                    string lid = game.LaunchUri.Substring(8);
+                    Log($"[Ubisoft] --- ATTEMPTING CACHE INSTALL --- ID: {lid}");
+                    uri = $"uplay://install/{lid}";
+                }
+                else
+                {
+                    Log($"[Ubisoft] Game not in local cache or marked as unclaimed. Launching Ubisoft Connect app.");
+                    uri = "uplay://";
+                }
+            }
             else
             {
                 uri = game.Source.ToLower() switch
                 {
                     "steam" => $"steam://install/{game.Id}",
                     "xbox" => $"msxbox://game/?productId={game.Id}",
-                    "ubisoft" => $"uplay://launch/{game.Id}/0",
                     _ => null
                 };
             }
         }
-        else if (string.IsNullOrEmpty(uri))
+        else 
         {
-            uri = game.Source.ToLower() switch
+            uri = game.LaunchUri;
+            
+            // Force Ubisoft URI format
+            if (game.Source != null && game.Source.StartsWith("Ubisoft", StringComparison.OrdinalIgnoreCase))
             {
-                "steam" => $"steam://run/{game.Id}",
-                "ubisoft" => $"uplay://launch/{game.Id}/0",
-                "epic" => $"com.epicgames.launcher://apps/{game.Id}?action=launch&silent=true",
-                "ea" => BuildEaUri(game),
-                _ => null
-            };
+                uri = $"uplay://launch/{game.Id}/0";
+            }
+
+            if (string.IsNullOrEmpty(uri))
+            {
+                uri = game.Source.ToLower() switch
+                {
+                                    "steam" => $"steam://run/{game.Id}",
+                                    "ubisoft" => $"uplay://launch/{game.Id}/0",
+                                    "epic" => $"com.epicgames.launcher://apps/{game.Id}?action=launch&silent=true",                    "ea" => BuildEaUri(game),
+                    _ => null
+                };
+            }
+        }
+
+        // Final Catch-all for Ubisoft to ensure app opens
+        if (string.IsNullOrEmpty(uri) && game.Source != null && game.Source.Contains("Ubisoft"))
+        {
+            uri = "uplay://";
         }
 
         if (!string.IsNullOrEmpty(uri))
         {
             try 
             {
-                Log($"EA Launch Debug: ID={game.Id}, Name={game.Name}, IsInstalled={game.IsInstalled}, URI={uri}");
+                Log($"[LaunchDebug] ID={game.Id}, Name={game.Name}, IsInstalled={game.IsInstalled}, URI={uri}");
                 Log($"Attempting to {(game.IsInstalled ? "launch" : "install")} {game.Name} ({game.Source}) via URI: {uri}");
                 Process.Start(new ProcessStartInfo(uri) { UseShellExecute = true });
             }
@@ -402,6 +429,7 @@ public class LocalLibraryService
                                 {
                                     if (!IsGameValid(name)) continue;
 
+                                    Log($"[Ubisoft Scan] Found installed game: {name} (ID: {subKeyName})");
                                     games.Add(new InstalledGame
                                     {
                                         Id = subKeyName,
