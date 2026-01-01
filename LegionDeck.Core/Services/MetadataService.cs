@@ -87,26 +87,28 @@ public class MetadataService
         try { var json = JsonSerializer.Serialize(_hiddenCache, new JsonSerializerOptions { WriteIndented = true }); File.WriteAllText(_hiddenCachePath, json); } catch { }
     }
 
-    public string? GetCover(string gameId) { _coverCache.TryGetValue(gameId, out var url); return url; }
-    public void SetCover(string gameId, string url) { _coverCache[gameId] = url; SaveCoverCache(); }
-    public bool HasCover(string gameId) => _coverCache.ContainsKey(gameId);
+    private readonly object _lock = new object();
 
-    public string? GetHero(string gameId) { _heroCache.TryGetValue(gameId, out var url); return url; }
-    public void SetHero(string gameId, string url) { _heroCache[gameId] = url; SaveHeroCache(); }
-    public bool HasHero(string gameId) => _heroCache.ContainsKey(gameId);
+    public string? GetCover(string gameId) { lock(_lock) { _coverCache.TryGetValue(gameId, out var url); return url; } }
+    public void SetCover(string gameId, string url, bool save = true) { lock(_lock) { _coverCache[gameId] = url; if (save) SaveCoverCache(); } }
+    public bool HasCover(string gameId) { lock(_lock) { return _coverCache.ContainsKey(gameId); } }
 
-    public string? GetDescription(string gameId) { _descriptionCache.TryGetValue(gameId, out var desc); return desc; }
-    public void SetDescription(string gameId, string desc) { _descriptionCache[gameId] = desc; SaveDescriptionCache(); }
-    public bool HasDescription(string gameId) => _descriptionCache.ContainsKey(gameId);
+    public string? GetHero(string gameId) { lock(_lock) { _heroCache.TryGetValue(gameId, out var url); return url; } }
+    public void SetHero(string gameId, string url, bool save = true) { lock(_lock) { _heroCache[gameId] = url; if (save) SaveHeroCache(); } }
+    public bool HasHero(string gameId) { lock(_lock) { return _heroCache.ContainsKey(gameId); } }
 
-    public string? GetName(string gameId) { _nameCache.TryGetValue(gameId, out var name); return name; }
-    public void SetName(string gameId, string name) { _nameCache[gameId] = name; SaveNameCache(); }
-    public bool HasName(string gameId) => _nameCache.ContainsKey(gameId);
+    public string? GetDescription(string gameId) { lock(_lock) { _descriptionCache.TryGetValue(gameId, out var desc); return desc; } }
+    public void SetDescription(string gameId, string desc, bool save = true) { lock(_lock) { _descriptionCache[gameId] = desc; if (save) SaveDescriptionCache(); } }
+    public bool HasDescription(string gameId) { lock(_lock) { return _descriptionCache.ContainsKey(gameId); } }
 
-    public string? GetType(string gameId) { _typeCache.TryGetValue(gameId, out var type); return type; }
-    public void SetType(string gameId, string type) { _typeCache[gameId] = type; SaveTypeCache(); }
-    public bool HasType(string gameId) => _typeCache.ContainsKey(gameId);
+    public string? GetName(string gameId) { lock(_lock) { _nameCache.TryGetValue(gameId, out var name); return name; } }
+    public void SetName(string gameId, string name, bool save = true) { lock(_lock) { _nameCache[gameId] = name; if (save) SaveNameCache(); } }
+    public bool HasName(string gameId) { lock(_lock) { return _nameCache.ContainsKey(gameId); } }
 
-    public void SetHidden(string gameId, bool isHidden) { _hiddenCache[gameId] = isHidden; SaveHiddenCache(); }
-    public bool IsHidden(string gameId) { _hiddenCache.TryGetValue(gameId, out var isHidden); return isHidden; }
+    public string? GetType(string gameId) { lock(_lock) { _typeCache.TryGetValue(gameId, out var type); return type; } }
+    public void SetType(string gameId, string type, bool save = true) { lock(_lock) { _typeCache[gameId] = type; if (save) SaveTypeCache(); } }
+    public bool HasType(string gameId) { lock(_lock) { return _typeCache.ContainsKey(gameId); } }
+
+    public void SetHidden(string gameId, bool isHidden) { lock(_lock) { _hiddenCache[gameId] = isHidden; SaveHiddenCache(); } }
+    public bool IsHidden(string gameId) { lock(_lock) { _hiddenCache.TryGetValue(gameId, out var isHidden); return isHidden; } }
 }

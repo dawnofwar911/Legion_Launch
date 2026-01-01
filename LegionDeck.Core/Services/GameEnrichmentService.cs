@@ -88,7 +88,7 @@ public class GameEnrichmentService
                                     if (!_metadataService.HasHero(idStr))
                                     {
                                         var hero = await _sgdbService.GetHeroImageByGameIdAsync(sgdbId.Value);
-                                        if (!string.IsNullOrEmpty(hero)) _metadataService.SetHero(idStr, hero);
+                                        if (!string.IsNullOrEmpty(hero)) _metadataService.SetHero(idStr, hero, false);
                                     }
                                 }
                             }
@@ -96,7 +96,7 @@ public class GameEnrichmentService
 
                         if (!string.IsNullOrEmpty(sgdbCover))
                         {
-                            _metadataService.SetCover(idStr, sgdbCover);
+                            _metadataService.SetCover(idStr, sgdbCover, false);
                             var coverDetails = new SteamStoreService.SteamStoreDetails 
                             { 
                                 VerticalCover = sgdbCover, 
@@ -126,9 +126,9 @@ public class GameEnrichmentService
                     {
                         Interlocked.Exchange(ref _consecutiveErrors, 0);
                         bool updated = false;
-                        if (!string.IsNullOrEmpty(details.Name)) { _metadataService.SetName(idStr, details.Name); updated = true; }
-                        if (!string.IsNullOrEmpty(details.ShortDescription)) _metadataService.SetDescription(idStr, details.ShortDescription);
-                        if (!string.IsNullOrEmpty(details.Type)) { _metadataService.SetType(idStr, details.Type); updated = true; }
+                        if (!string.IsNullOrEmpty(details.Name)) { _metadataService.SetName(idStr, details.Name, false); updated = true; }
+                        if (!string.IsNullOrEmpty(details.ShortDescription)) _metadataService.SetDescription(idStr, details.ShortDescription, false);
+                        if (!string.IsNullOrEmpty(details.Type)) { _metadataService.SetType(idStr, details.Type, false); updated = true; }
                         
                         if (updated) onGameUpdated?.Invoke(idStr, details);
                         lock(updatedDetails) { updatedDetails[idStr] = details; }
@@ -151,6 +151,14 @@ public class GameEnrichmentService
         }
         
         await Task.WhenAll(batchTasks);
+        
+        // Save all caches once at the end
+        _metadataService.SaveCoverCache();
+        _metadataService.SaveDescriptionCache();
+        _metadataService.SaveNameCache();
+        _metadataService.SaveTypeCache();
+        _metadataService.SaveHeroCache();
+        
         return updatedDetails;
     }
 

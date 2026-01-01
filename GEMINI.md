@@ -96,17 +96,22 @@ Epic: com.epicgames.launcher://
 - Troubleshooting: If the app crashes on launch, check `%LOCALAPPDATA%\LegionDeck\startup.log`.
 
 7. Current Context / Active Task
-Status: Phase 3 In Progress.
-Next Action: Finalize UI animation polish and transition to Phase 4 (Handheld Customization).
+Status: Phase 4 Ready.
+Next Action: Begin Phase 4 (Handheld Customization & System Tweaks).
 
 Roadmap Progress:
 [x] Phase 1: The Brain (CLI) - COMPLETE
 [x] Phase 2: The Face (GUI) - COMPLETE
+[x] Phase 3: The Library (Management & Polish) - COMPLETE
+    [x] Step 1: Available Games (Merged Scraper + Official API for EA Play Pro).
+    [x] Step 2: Installation Management (Direct URI launching/installing via numeric Content IDs).
+    [x] Step 3: Metadata Enrichment (SteamGridDB Hero/Cover art for all sources).
+    [x] Step 4: Advanced Ubisoft Integration (Local Cache Scraping + Master ID Mapping).
+    [x] Step 5: Unified Library View (Multi-select Filters, Advanced Sorting, Deduplication).
+    [x] Step 6: UX Polish (Native Gamepad Navigation, Focus Management, Metadata Caching).
 
-[ ] Phase 3: The Library (Management & Polish) - IN PROGRESS
-[x] Step 1: Available Games (Merged Scraper + Official API for EA Play Pro).
-[x] Step 2: Installation Management (Direct URI launching/installing via numeric Content IDs).
-[x] Step 3: Metadata Enrichment (SteamGridDB Hero/Cover art for all sources).
-[x] Step 4: Advanced Ubisoft Integration (Local Cache Scraping + Master ID Mapping for Ubisoft+).
-[ ] Step 5: Advanced Sorting & Filtering (Sort by Source, Genre, Status).
-[ ] Step 6: UI Transitions & Animation Polish.
+[ ] Phase 4: The Experience (Handheld Features) - PLANNED
+    [ ] Step 1: TDP/Power Profiles (Lenovo Legion Go Integration).
+    [ ] Step 2: Quick Settings Overlay (Brightness, Volume, Resolution).
+    [ ] Step 3: Battery Monitoring & Auto-Sleep.
+    [ ] Step 4: Controller Mapping Profiles.
