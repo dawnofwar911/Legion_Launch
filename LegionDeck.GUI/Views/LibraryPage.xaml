@@ -56,6 +56,7 @@
                 <ToggleButton Content="Ubisoft" Tag="Source_Ubisoft" Click="Filter_Click" />
                 <ToggleButton Content="EA" Tag="Source_EA" Click="Filter_Click" />
                 <ToggleButton Content="Epic" Tag="Source_Epic" Click="Filter_Click" />
+                <ToggleButton Content="Battle.net" Tag="Source_BattleNet" Click="Filter_Click" />
 
                 <Rectangle Width="1" Height="24" Fill="{ThemeResource SystemControlForegroundBaseMediumLowBrush}" Margin="4,0" />
 

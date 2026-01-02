@@ -201,6 +201,34 @@ public class LibraryUpdateService
                 } catch (Exception ex) { Log($"EA Sync Error: {ex.Message}"); }
             }
 
+            // 5. Epic
+            if (source == null || source.Equals("Epic", StringComparison.OrdinalIgnoreCase))
+            {
+                try
+                {
+                    Log("Starting Epic Library Sync...");
+                    var epicService = new EpicLibraryService(new ConfigService());
+                    var list = await epicService.GetOwnedGamesAsync();
+                    _localService.UpdateInstallationStatus(list, localGames);
+                    await _cacheService.SaveLibraryAsync("Epic", list);
+                    Log($"Epic Sync Complete. Found {list.Count} games.");
+                } catch (Exception ex) { Log($"Epic Sync Error: {ex.Message}"); }
+            }
+
+            // 6. Battle.net
+            if (source == null || source.Equals("Battle.net", StringComparison.OrdinalIgnoreCase))
+            {
+                try
+                {
+                    Log("Starting Battle.net Library Sync...");
+                    var bnetService = new BattleNetLibraryService(new ConfigService());
+                    var list = await bnetService.GetOwnedGamesAsync();
+                    _localService.UpdateInstallationStatus(list, localGames);
+                    await _cacheService.SaveLibraryAsync("Battle.net", list);
+                    Log($"Battle.net Sync Complete. Found {list.Count} games.");
+                } catch (Exception ex) { Log($"Battle.net Sync Error: {ex.Message}"); }
+            }
+
             if (source == null) _hasUpdated = true;
             Log("Full UpdateAllAsync Complete.");
         } 

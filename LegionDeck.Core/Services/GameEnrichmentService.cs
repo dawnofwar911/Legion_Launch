@@ -16,12 +16,33 @@ public class GameEnrichmentService
     private readonly SteamGridDbService _sgdbService;
     private int _consecutiveErrors = 0;
 
+    public static void Log(string message)
+    {
+        try
+        {
+            var path = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LegionDeck", "startup.log");
+            File.AppendAllText(path, $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - [GameEnrichmentService] {message}\n");
+        } catch {}
+    }
+
     public GameEnrichmentService(ConfigService configService, MetadataService metadataService)
     {
         _metadataService = metadataService;
         _steamStoreService = new SteamStoreService();
         _igdbService = new IgdbService(configService);
         _sgdbService = new SteamGridDbService(configService);
+    }
+
+    private string CleanGameName(string name)
+    {
+        name = name.Replace("™", "").Replace("®", "").Trim();
+        // Remove common edition/platform suffixes only if they are at the end
+        name = System.Text.RegularExpressions.Regex.Replace(name, @"\s*\b(GOTY|Game of the Year|Definitive|Ultimate|Deluxe|Standard|Collector's|Remastered|Classic|Edition|PC|Xbox|PlayStation|Switch)\b\s*$", "", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        // Remove text in parentheses if it's not a year (e.g., (2020), but not (Ultimate Edition))
+        name = System.Text.RegularExpressions.Regex.Replace(name, @"\s*\((?!(\d{4}|\w+ Edition))\b.*?\)", "");
+        // Only remove prefixes if they are well-known publisher/series prefixes and not part of game title
+        name = System.Text.RegularExpressions.Regex.Replace(name, @"\b(Sid Meier's|Tom Clancy's|Assassin's Creed)\b", "", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        return name.Trim();
     }
 
     public async Task<Dictionary<string, SteamStoreService.SteamStoreDetails>> EnrichGamesBatchAsync(
@@ -42,11 +63,17 @@ public class GameEnrichmentService
         int processedCount = 0;
         _consecutiveErrors = 0;
 
-        for (int i = 0; i < games.Count; i++)
+        // Prioritize games that need enrichment (e.g., no cover)
+        var gamesToEnrich = games
+            .OrderBy(g => string.IsNullOrEmpty(_metadataService.GetCover(g.Id)) ? 0 : 1) // Prioritize games without cover
+            .ThenBy(g => string.IsNullOrEmpty(_metadataService.GetName(g.Id)) ? 0 : 1) // Then games without name
+            .ToList();
+
+        for (int i = 0; i < gamesToEnrich.Count; i++)
         {
             if (cancellationToken.IsCancellationRequested) break;
 
-            var game = games[i];
+            var game = gamesToEnrich[i];
             
             batchTasks.Add(Task.Run(async () =>
             {
@@ -69,27 +96,37 @@ public class GameEnrichmentService
                             sgdbCover = await _sgdbService.GetVerticalCoverAsync(appId);
                         }
                         
-                        // B. Try by Name (Fallback or non-Steam like EA)
+                        // B. Try by Name (Fallback or non-Steam like EA, Epic, Battle.net)
                         if (string.IsNullOrEmpty(sgdbCover))
                         {
-                            var nameToSearch = _metadataService.GetName(idStr) ?? game.Name;
+                            var nameToSearch = CleanGameName(_metadataService.GetName(idStr) ?? game.Name);
                             
-                            // Clean name for better search results (remove trademarks etc)
-                            nameToSearch = nameToSearch.Replace("™", "").Replace("®", "").Trim();
-
                             if (!string.IsNullOrEmpty(nameToSearch))
                             {
-                                var sgdbId = await _sgdbService.SearchGameIdAsync(nameToSearch);
-                                if (sgdbId.HasValue) 
+                                try
                                 {
-                                    sgdbCover = await _sgdbService.GetVerticalCoverByGameIdAsync(sgdbId.Value);
-                                    
-                                    // Also fetch Hero if we have the ID handy
-                                    if (!_metadataService.HasHero(idStr))
+                                    Log($"Searching SGDB for image for non-Steam game: {nameToSearch} (ID: {idStr})");
+                                    var sgdbId = await _sgdbService.SearchGameIdAsync(nameToSearch);
+                                    if (sgdbId.HasValue) 
                                     {
-                                        var hero = await _sgdbService.GetHeroImageByGameIdAsync(sgdbId.Value);
-                                        if (!string.IsNullOrEmpty(hero)) _metadataService.SetHero(idStr, hero, false);
+                                        sgdbCover = await _sgdbService.GetVerticalCoverByGameIdAsync(sgdbId.Value);
+                                        Log($"Found SGDB cover for {nameToSearch}: {sgdbCover}");
+                                        
+                                        // Also fetch Hero if we have the ID handy
+                                        if (!_metadataService.HasHero(idStr))
+                                        {
+                                            var hero = await _sgdbService.GetHeroImageByGameIdAsync(sgdbId.Value);
+                                            if (!string.IsNullOrEmpty(hero)) _metadataService.SetHero(idStr, hero, false);
+                                        }
                                     }
+                                    else
+                                    {
+                                        Log($"No SGDB ID found for {nameToSearch}");
+                                    }
+                                }
+                                catch (Exception ex)
+                                {
+                                    Log($"Error searching SGDB for {nameToSearch}: {ex.Message}");
                                 }
                             }
                         }

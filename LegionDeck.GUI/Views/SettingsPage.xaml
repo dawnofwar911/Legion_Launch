@@ -47,6 +47,8 @@
                     <Button Content="Login to Xbox" Click="XboxLogin_Click" Width="200" UseSystemFocusVisuals="True" />
                     <Button Content="Login to Ubisoft+" Click="UbisoftLogin_Click" Width="200" UseSystemFocusVisuals="True" />
                     <Button Content="Login to EA" Click="EALogin_Click" Width="200" UseSystemFocusVisuals="True" />
+                    <Button Content="Login to Epic Games" Click="EpicLogin_Click" Width="200" UseSystemFocusVisuals="True" />
+                    <Button Content="Login to Battle.net" Click="BattleNetLogin_Click" Width="200" UseSystemFocusVisuals="True" />
                 </StackPanel>
             </StackPanel>
         </Grid>

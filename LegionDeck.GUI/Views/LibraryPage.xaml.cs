@@ -97,6 +97,7 @@ public sealed partial class LibraryPage : Page
             var ubiGames = await _cacheService.LoadLibraryAsync("Ubisoft");
             var eaGames = await _cacheService.LoadLibraryAsync("EA");
             var epicGames = await _cacheService.LoadLibraryAsync("Epic");
+            var bnetGames = await _cacheService.LoadLibraryAsync("Battle.net");
 
             // 3. Merge
             // We use a dictionary to merge duplicates (e.g. Installed vs Cloud version of same game)
@@ -145,6 +146,7 @@ public sealed partial class LibraryPage : Page
             MergeList(ubiGames);
             MergeList(eaGames);
             MergeList(epicGames);
+            MergeList(bnetGames);
 
             _allGames = merged.Values.Select(g => {
                 var vm = new LibraryGameViewModel(g);
@@ -160,8 +162,20 @@ public sealed partial class LibraryPage : Page
                 this.DispatcherQueue.TryEnqueue(() => {
                     var vm = _allGames.FirstOrDefault(g => g.GameData.Id == id);
                     if (vm != null) {
-                        if (!string.IsNullOrEmpty(details.VerticalCover)) vm.ImgCapsule = details.VerticalCover;
+                        if (!string.IsNullOrEmpty(details.VerticalCover))
+                        {
+                            vm.ImgCapsule = details.VerticalCover + $"?t={DateTimeOffset.Now.ToUnixTimeSeconds()}";
+                            GameEnrichmentService.Log($"Updated ImgCapsule for {vm.Name} ({id}) with {details.VerticalCover}");
+                        }
+                        else
+                        {
+                            GameEnrichmentService.Log($"No VerticalCover in details for {vm.Name} ({id}).");
+                        }
                         if (!string.IsNullOrEmpty(details.Name)) vm.Name = details.Name;
+                    }
+                    else
+                    {
+                        GameEnrichmentService.Log($"Could not find ViewModel for {id}.");
                     }
                 });
             }, _enrichmentCts.Token);
@@ -187,6 +201,7 @@ public sealed partial class LibraryPage : Page
         bool sourceUbi = IsFilterChecked("Source_Ubisoft");
         bool sourceEA = IsFilterChecked("Source_EA");
         bool sourceEpic = IsFilterChecked("Source_Epic");
+        bool sourceBNet = IsFilterChecked("Source_BattleNet");
 
         bool stateClaimed = IsFilterChecked("State_Claimed");
         bool stateUnclaimed = IsFilterChecked("State_Unclaimed");
@@ -204,8 +219,9 @@ public sealed partial class LibraryPage : Page
             if (sourceUbi && g.Source.Contains("Ubisoft")) sourceMatch = true;
             if (sourceEA && (g.Source.Contains("EA") || g.Source.Contains("Electronic Arts"))) sourceMatch = true;
             if (sourceEpic && g.Source.Contains("Epic")) sourceMatch = true;
+            if (sourceBNet && g.Source.Contains("Battle.net")) sourceMatch = true;
             
-            if (!sourceSteam && !sourceXbox && !sourceUbi && !sourceEA && !sourceEpic) sourceMatch = true;
+            if (!sourceSteam && !sourceXbox && !sourceUbi && !sourceEA && !sourceEpic && !sourceBNet) sourceMatch = true;
 
             // Ownership Filter
             bool ownerMatch = false;
@@ -308,9 +324,10 @@ public sealed partial class LibraryPage : Page
                 var gameId = await _sgdbService.SearchGameIdAsync(vm.Name);
                 if (gameId.HasValue) {
                     var coverUrl = await _sgdbService.GetVerticalCoverByGameIdAsync(gameId.Value);
-                    if (!string.IsNullOrEmpty(coverUrl)) UpdateGameCover(vm, coverUrl);
-                }
-            } catch { }
+                    if (!string.IsNullOrEmpty(coverUrl)) { UpdateGameCover(vm, coverUrl); return; }
+                    else { GameEnrichmentService.Log($"No SGDB cover found for GameId {gameId.Value} (from '{vm.Name}')"); }
+                } else { GameEnrichmentService.Log($"No SGDB GameId found for '{vm.Name}'"); }
+            } catch (Exception ex) { GameEnrichmentService.Log($"Error in Image_ImageFailed SGDB lookup for '{vm.Name}': {ex.Message}"); }
         }
     }
 

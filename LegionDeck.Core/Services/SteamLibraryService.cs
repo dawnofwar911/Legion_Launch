@@ -34,12 +34,15 @@ public class SteamLibraryService
         var authTokensPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LegionDeck", "AuthTokens");
         var steamCookieFilePath = Path.Combine(authTokensPath, "steam_cookies.json");
         
+        string? apiKey = _configService.GetApiKey("STEAM");
+
         // 1. Ensure Master App List is loaded (for instant names)
         if (_masterAppListCache == null)
         {
             Log("Fetching master Steam app list for name resolution...");
             var storeService = new SteamStoreService();
-            _masterAppListCache = await storeService.GetFullAppListAsync();
+            // Pass API Key if available to use reliable IStoreService
+            _masterAppListCache = await storeService.GetFullAppListAsync(apiKey);
             Log($"Master app list loaded with {_masterAppListCache.Count} items.");
         }
 
@@ -72,7 +75,6 @@ public class SteamLibraryService
                 // 3. Fallback: Dynamic Store API (userdata) - Only if XML failed
                 // NEW STRATEGY: Use Configured API Key or Scrape webapi_token for IPlayerService
                 
-                string? apiKey = _configService.GetApiKey("STEAM");
                 string? webApiToken = null;
         
                 if (!string.IsNullOrEmpty(apiKey))

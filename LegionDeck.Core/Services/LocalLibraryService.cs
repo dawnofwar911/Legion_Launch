@@ -12,6 +12,21 @@ namespace LegionDeck.Core.Services;
 [SupportedOSPlatform("windows")]
 public class LocalLibraryService
 {
+    private readonly List<ILauncherStrategy> _strategies;
+
+    public LocalLibraryService()
+    {
+        _strategies = new List<ILauncherStrategy>
+        {
+            new SteamLauncherStrategy(),
+            new XboxLauncherStrategy(),
+            new EaLauncherStrategy(),
+            new UbisoftLauncherStrategy(),
+            new EpicLauncherStrategy(),
+            new BattleNetLauncherStrategy()
+        };
+    }
+
     public class InstalledGame
     {
         public string Id { get; set; } = string.Empty;
@@ -28,86 +43,14 @@ public class LocalLibraryService
         Log("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
         Log($"!!! UNIQUE LAUNCH START: {game.Name} !!!");
         Log("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-        Log("--- [UBI_FINAL_TEST] ---");
-        string? uri = null;
         
-        // If not installed, trigger the INSTALL URI
-        if (!game.IsInstalled)
-        {
-            if (game.Source != null && game.Source.StartsWith("EA", StringComparison.OrdinalIgnoreCase))
-            {
-                // ... (EA logic)
-                if (string.IsNullOrEmpty(game.Id) || game.Id.StartsWith("Origin.OFR"))
-                {
-                    Log($"[EA] No numeric Content ID found for {game.Name} (ID: {game.Id}). Opening Library.");
-                    uri = "origin2://library/open";
-                }
-                else
-                {
-                    uri = BuildEaUri(game);
-                }
-            }
-            else if (game.Source != null && game.Source.StartsWith("Ubisoft", StringComparison.OrdinalIgnoreCase))
-            {
-                bool isNumeric = long.TryParse(game.Id, out _);
-
-                if (game.LaunchUri != null && game.LaunchUri.StartsWith("INSTALL:"))
-                {
-                    string lid = game.LaunchUri.Substring(8);
-                    Log($"[Ubisoft] --- ATTEMPTING CACHE INSTALL --- ID: {lid}");
-                    uri = $"uplay://install/{lid}";
-                }
-                else
-                {
-                    Log($"[Ubisoft] Game not in local cache or marked as unclaimed. Launching Ubisoft Connect app.");
-                    uri = "uplay://";
-                }
-            }
-            else
-            {
-                uri = game.Source.ToLower() switch
-                {
-                    "steam" => $"steam://install/{game.Id}",
-                    "xbox" => $"msxbox://game/?productId={game.Id}",
-                    _ => null
-                };
-            }
-        }
-        else 
-        {
-            uri = game.LaunchUri;
-            
-            // Force Ubisoft URI format
-            if (game.Source != null && game.Source.StartsWith("Ubisoft", StringComparison.OrdinalIgnoreCase))
-            {
-                uri = $"uplay://launch/{game.Id}/0";
-            }
-
-            if (string.IsNullOrEmpty(uri))
-            {
-                uri = game.Source.ToLower() switch
-                {
-                                    "steam" => $"steam://run/{game.Id}",
-                                    "ubisoft" => $"uplay://launch/{game.Id}/0",
-                                    "epic" => $"com.epicgames.launcher://apps/{game.Id}?action=launch&silent=true",                    "ea" => BuildEaUri(game),
-                    _ => null
-                };
-            }
-        }
-
-        // Final Catch-all for Ubisoft to ensure app opens
-        if (string.IsNullOrEmpty(uri) && game.Source != null && game.Source.Contains("Ubisoft"))
-        {
-            uri = "uplay://";
-        }
-
-        if (!string.IsNullOrEmpty(uri))
+        var strategy = _strategies.FirstOrDefault(s => s.CanHandle(game.Source));
+        if (strategy != null)
         {
             try 
             {
-                Log($"[LaunchDebug] ID={game.Id}, Name={game.Name}, IsInstalled={game.IsInstalled}, URI={uri}");
-                Log($"Attempting to {(game.IsInstalled ? "launch" : "install")} {game.Name} ({game.Source}) via URI: {uri}");
-                Process.Start(new ProcessStartInfo(uri) { UseShellExecute = true });
+                Log($"[Launch] Using strategy {strategy.GetType().Name} for {game.Name} ({game.Source})");
+                await strategy.LaunchAsync(game);
             }
             catch (Exception ex)
             {
@@ -116,35 +59,9 @@ public class LocalLibraryService
         }
         else
         {
-            Log($"Failed to handle {game.Name} ({game.Source}): No URI determined.");
+            Log($"Failed to handle {game.Name} ({game.Source}): No strategy found.");
         }
         await Task.CompletedTask;
-    }
-
-    private string? BuildEaUri(InstalledGame game)
-    {
-        if (string.IsNullOrEmpty(game.Id)) return "origin2://library/open";
-
-        // Generate slug from name
-        string slug = game.Name.ToLowerInvariant()
-            .Replace(" ", "-")
-            .Replace(":", "")
-            .Replace("'", "")
-            .Replace("™", "")
-            .Replace("®", "")
-            .Replace(".", "")
-            .Replace("!", "");
-
-        if (game.IsInstalled || (!string.IsNullOrEmpty(game.Id) && !game.Id.StartsWith("Origin.OFR")))
-        {
-             // Numeric ID (Content ID) -> Installer or Launch
-             return $"origin2://game/launch/?offerIds={game.Id}&slug={slug}&autoDownload=true";
-        }
-        else 
-        {
-            // No valid Content ID -> Store/Library Page fallback
-            return $"origin2://store/open?slug={slug}";
-        }
     }
 
     public void UpdateInstallationStatus(List<InstalledGame> cloudGames, List<InstalledGame> localGames)
@@ -231,8 +148,79 @@ public class LocalLibraryService
         {
             Log($"Error scanning Xbox games: {ex.Message}");
         }
+
+        try
+        {
+            Log("Starting Battle.net game scan");
+            allGames.AddRange(GetInstalledBattleNetGames());
+            Log($"Battle.net scan finished. Total games so far: {allGames.Count}");
+        }
+        catch (Exception ex)
+        {
+            Log($"Error scanning Battle.net games: {ex.Message}");
+        }
         
         return allGames;
+    }
+
+    public List<InstalledGame> GetInstalledBattleNetGames()
+    {
+        // Use the dedicated service logic (inlined here or delegated)
+        // For now, I'll use the Registry logic directly to avoid circular deps if BattleNetLibraryService uses LocalLibraryService types
+        var games = new List<InstalledGame>();
+        var uninstallKey = @"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall";
+        
+        try
+        {
+            using var key = Registry.LocalMachine.OpenSubKey(uninstallKey);
+            if (key != null)
+            {
+                foreach (var subKeyName in key.GetSubKeyNames())
+                {
+                    try
+                    {
+                        using var subKey = key.OpenSubKey(subKeyName);
+                        if (subKey == null) continue;
+
+                        var displayName = subKey.GetValue("DisplayName") as string;
+                        var publisher = subKey.GetValue("Publisher") as string;
+                        var installLocation = subKey.GetValue("InstallLocation") as string;
+                        var uninstallString = subKey.GetValue("UninstallString") as string;
+
+                        if (!string.IsNullOrEmpty(displayName) && 
+                            (publisher == "Blizzard Entertainment" || (uninstallString != null && uninstallString.Contains("Battle.net"))))
+                        {
+                            if (displayName == "Battle.net") continue; 
+
+                            string? productId = null;
+                            if (!string.IsNullOrEmpty(uninstallString) && uninstallString.Contains("os-product-uninstall="))
+                            {
+                                var parts = uninstallString.Split(new[] { "os-product-uninstall=" }, StringSplitOptions.None);
+                                if (parts.Length > 1)
+                                {
+                                    productId = parts[1].Split(' ')[0].Trim('"');
+                                }
+                            }
+
+                            if (productId != null)
+                            {
+                                games.Add(new InstalledGame
+                                {
+                                    Id = productId,
+                                    Name = displayName,
+                                    Source = "Battle.net",
+                                    InstallPath = installLocation ?? string.Empty,
+                                    LaunchUri = $"battlenet://{productId}"
+                                });
+                            }
+                        }
+                    }
+                    catch { }
+                }
+            }
+        }
+        catch { }
+        return games;
     }
 
     public List<InstalledGame> GetInstalledXboxGames()
@@ -583,7 +571,7 @@ public class LocalLibraryService
                !lower.Contains("tool");
     }
 
-    private void Log(string message)
+    public static void Log(string message)
     {
         try
         {

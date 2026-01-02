@@ -44,6 +44,12 @@ public class Program
 
         [Option('u', "ubisoftplus", Required = false, HelpText = "Check Ubisoft+ subscription status.")]
         public bool UbisoftPlus { get; set; }
+
+        [Option("epic", Required = false, HelpText = "Sync Epic Games library.")]
+        public bool Epic { get; set; }
+
+        [Option("battlenet", Required = false, HelpText = "Sync Battle.net library.")]
+        public bool BattleNet { get; set; }
     }
 
     [Verb("config", HelpText = "Configure application settings.")]
@@ -80,6 +86,8 @@ public class Program
                 services.AddTransient<XboxAuthService>();
                 services.AddTransient<EaAuthService>();
                 services.AddTransient<UbisoftAuthService>();
+                services.AddTransient<EpicAuthService>();
+                services.AddTransient<BattleNetAuthService>();
                 services.AddTransient<SteamWishlistService>(); 
                 services.AddTransient<XboxDataService>(); 
                 services.AddTransient<EaDataService>(); 
@@ -184,6 +192,65 @@ public class Program
              catch (Exception ex)
              {
                  Console.WriteLine($"Ubisoft authentication failed: {ex.Message}");
+                 return 1;
+             }
+        }
+        else if (opts.Service.Equals("epic", StringComparison.OrdinalIgnoreCase))
+        {
+             var epicAuth = services.GetRequiredService<EpicAuthService>();
+             try
+             {
+                 var result = await epicAuth.LoginAsync();
+                 if (!string.IsNullOrEmpty(result) && result.StartsWith("EpicCode:"))
+                 {
+                    Console.WriteLine("Epic authentication code captured successfully.");
+                 }
+                 else
+                 {
+                    Console.WriteLine("Epic authentication failed: No code retrieved.");
+                    return 1;
+                 }
+             }
+             catch (Exception ex)
+             {
+                 Console.WriteLine($"Epic authentication failed: {ex.Message}");
+                 return 1;
+             }
+        }
+        else if (opts.Service.Equals("battlenet", StringComparison.OrdinalIgnoreCase))
+        {
+             // Note: BattleNetAuthService isn't registered in DI yet, so we instantiate directly or add it.
+             // Best to add it to CreateHostBuilder. But for now, we can try direct instantiation if needed, 
+             // but let's assume I'll register it in the next step.
+             // Actually, I should check if I registered it. I didn't register BattleNetAuthService in Program.cs.
+             // I will add the registration logic in the next step.
+             // Wait, I can't do two things at once. I'll add the case here assuming registration.
+             
+             // Wait, I need to register it first or use `new BattleNetAuthService()`. 
+             // Since DI is used, I should register it.
+             // I'll add the case now and fix registration immediately after.
+             
+             // Actually, I'll instantiate directly to avoid breaking the build if I forget to register.
+             // But the method signature uses `IServiceProvider services`.
+             // I'll register it properly in CreateHostBuilder in a separate edit.
+             
+             var bnetAuth = new BattleNetAuthService(); // Direct instantiation for now
+             try
+             {
+                 var status = await bnetAuth.LoginAsync();
+                 if (status == "BattleNetLoggedIn")
+                 {
+                    Console.WriteLine("Battle.net authentication completed.");
+                 }
+                 else
+                 {
+                    Console.WriteLine("Battle.net authentication failed.");
+                    return 1;
+                 }
+             }
+             catch (Exception ex)
+             {
+                 Console.WriteLine($"Battle.net authentication failed: {ex.Message}");
                  return 1;
              }
         }
@@ -495,6 +562,28 @@ public class Program
             Console.WriteLine($"\nEA Play Pro ({pro.Count} titles):");
             foreach (var g in pro.OrderBy(x => x.Name).Take(10)) Console.WriteLine($"  - {g.Name}");
             if (pro.Count > 10) Console.WriteLine("  ...");
+        }
+        else if (opts.Epic)
+        {
+            Console.WriteLine("Synchronizing Epic Games library...");
+            var epicService = new EpicLibraryService(services.GetRequiredService<ConfigService>());
+            var games = await epicService.GetOwnedGamesAsync();
+            Console.WriteLine($"Found {games.Count} owned games on Epic:");
+            foreach(var g in games.OrderBy(x => x.Name))
+            {
+                Console.WriteLine($"- {g.Name} (ID: {g.Id})");
+            }
+        }
+        else if (opts.BattleNet)
+        {
+            Console.WriteLine("Synchronizing Battle.net library...");
+            var bnetService = new BattleNetLibraryService(services.GetRequiredService<ConfigService>());
+            var games = await bnetService.GetOwnedGamesAsync();
+            Console.WriteLine($"Found {games.Count} owned games on Battle.net:");
+            foreach(var g in games.OrderBy(x => x.Name))
+            {
+                Console.WriteLine($"- {g.Name} (ID: {g.Id})");
+            }
         }
         return 0;
     }

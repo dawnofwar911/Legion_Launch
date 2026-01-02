@@ -18,7 +18,8 @@ public class SourceToColorConverter : IValueConverter
                 string s when s.Contains("not redeemed") => Color.FromArgb(255, 255, 140, 0), // Orange
                 string s when s.Contains("ea") => Color.FromArgb(255, 255, 71, 71),
                 "ubisoft" => Color.FromArgb(255, 0, 112, 255),
-                "epic" => Color.FromArgb(255, 51, 51, 51),
+                "epic" => Color.FromArgb(255, 4, 150, 255), // Bright Epic blue
+                "battle.net" => Color.FromArgb(255, 0, 174, 255), // Battle.net Blue
                 _ => Color.FromArgb(255, 128, 128, 128)
             };
             return new SolidColorBrush(color);

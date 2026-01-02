@@ -97,8 +97,8 @@ Epic: com.epicgames.launcher://
 - Troubleshooting: If the app crashes on launch, check `%LOCALAPPDATA%\LegionDeck\startup.log`.
 
 7. Current Context / Active Task
-Status: Preparing for Phase 3.5.
-Next Action: Refactor Launch Logic to Strategy Pattern.
+Status: Phase 3.5 in progress.
+Next Action: Game Process Monitoring (Preparation for TDP Profiles).
 
 Roadmap Progress:
 [x] Phase 1: The Brain (CLI) - COMPLETE
@@ -112,9 +112,9 @@ Roadmap Progress:
     [x] Step 6: UX Polish (Native Gamepad Navigation, Focus Management, Metadata Caching).
 
 [ ] Phase 3.5: Expansion & Architecture (The Foundation) - NEXT
-    [ ] Step 1: Refactor Launch Logic to Strategy Pattern (ILauncherStrategy).
-    [ ] Step 2: Epic Games Account Sync (Full Library via Legendary/Playnite logic).
-    [ ] Step 3: Battle.net Integration (Installed Game Detection).
+    [x] Step 1: Refactor Launch Logic to Strategy Pattern (ILauncherStrategy).
+    [x] Step 2: Epic Games Account Sync (Full Library via Legendary/Playnite logic).
+    [x] Step 3: Battle.net Integration (Installed Game Detection).
     [ ] Step 4: Game Process Monitoring (Preparation for TDP Profiles).
 
 [ ] Phase 4: The Experience (Handheld Features) - PLANNED

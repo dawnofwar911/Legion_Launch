@@ -61,7 +61,7 @@ public class SteamGridDbService
             var path = System.IO.Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.LocalApplicationData), "LegionDeck", "startup.log");
             System.IO.File.AppendAllText(path, $"{System.DateTime.Now:yyyy-MM-dd HH:mm:ss} - [SGDB] {message}\n");
         }
-        catch { }
+        catch {{ }}
     }
 
     public async Task<int?> SearchGameIdAsync(string gameName)
@@ -82,7 +82,8 @@ public class SteamGridDbService
             var response = await _httpClient.SendAsync(request);
             if (!response.IsSuccessStatusCode) 
             {
-                Log($"Search failed for '{gameName}'. Status: {response.StatusCode}");
+                var errorContent = await response.Content.ReadAsStringAsync();
+                Log($"Search failed for '{{gameName}}'. Status: {response.StatusCode}. Content: {errorContent}");
                 return null;
             }
 
@@ -92,17 +93,17 @@ public class SteamGridDbService
             if (result?.Success == true && result.Data != null && result.Data.Any())
             {
                 var id = result.Data.First().Id;
-                Log($"Found ID {id} for game '{gameName}'");
+                Log($"Found ID {id} for game '{{gameName}}'");
                 return id;
             }
             else
             {
-                Log($"No results found for '{gameName}'");
+                Log($"No results found for '{{gameName}}'");
             }
         }
         catch (Exception ex)
         {
-            Log($"Search Error for '{gameName}': {ex.Message}");
+            Log($"Search Error for '{{gameName}}': {ex.Message}");
         }
         return null;
     }
@@ -110,7 +111,11 @@ public class SteamGridDbService
     public async Task<string?> GetVerticalCoverByGameIdAsync(int gameId)
     {
         EnsureApiKey();
-        if (string.IsNullOrEmpty(_apiKey)) return null;
+        if (string.IsNullOrEmpty(_apiKey)) 
+        {
+            Log("API Key is missing or empty.");
+            return null;
+        }
 
         var url = $"{BaseUrl}grids/game/{gameId}?dimensions=600x900,342x482,660x930";
         
@@ -122,7 +127,8 @@ public class SteamGridDbService
             var response = await _httpClient.SendAsync(request);
             if (!response.IsSuccessStatusCode)
             {
-                Log($"GetGrid failed for ID {gameId}. Status: {response.StatusCode}");
+                var errorContent = await response.Content.ReadAsStringAsync();
+                Log($"GetGrid failed for ID {gameId}. Status: {response.StatusCode}. Content: {errorContent}");
                 return null;
             }
 
@@ -151,7 +157,11 @@ public class SteamGridDbService
     public async Task<string?> GetVerticalCoverAsync(int steamAppId)
     {
         EnsureApiKey();
-        if (string.IsNullOrEmpty(_apiKey)) return null;
+        if (string.IsNullOrEmpty(_apiKey)) 
+        {
+            Log("API Key is missing or empty.");
+            return null;
+        }
 
         var url = $"{BaseUrl}grids/steam/{steamAppId}?dimensions=600x900,342x482,660x930";
         
@@ -161,7 +171,12 @@ public class SteamGridDbService
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _apiKey);
             
             var response = await _httpClient.SendAsync(request);
-            if (!response.IsSuccessStatusCode) return null;
+            if (!response.IsSuccessStatusCode) 
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                Log($"GetGrid failed for SteamAppId {steamAppId}. Status: {response.StatusCode}. Content: {errorContent}");
+                return null;
+            }
 
             var json = await response.Content.ReadAsStringAsync();
             var result = JsonSerializer.Deserialize<SgdbResponse<List<SgdbImage>>>(json);
@@ -169,12 +184,18 @@ public class SteamGridDbService
             if (result?.Success == true && result.Data != null && result.Data.Any())
             {
                 // Return the highest scored image
-                return result.Data.OrderByDescending(x => x.Score).FirstOrDefault()?.Url;
+                var urlResult = result.Data.OrderByDescending(x => x.Score).FirstOrDefault()?.Url;
+                Log($"Found cover for SteamAppId {steamAppId}: {urlResult}");
+                return urlResult;
+            }
+            else
+            {
+                Log($"No cover found for SteamAppId {steamAppId}");
             }
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"SGDB Error: {ex.Message}");
+            Log($"GetGrid Error for SteamAppId {steamAppId}: {ex.Message}");
         }
 
         return null;
@@ -183,7 +204,11 @@ public class SteamGridDbService
     public async Task<string?> GetHeroImageByGameIdAsync(int gameId)
     {
         EnsureApiKey();
-        if (string.IsNullOrEmpty(_apiKey)) return null;
+        if (string.IsNullOrEmpty(_apiKey)) 
+        {
+            Log("API Key is missing or empty.");
+            return null;
+        }
 
         var url = $"{BaseUrl}heroes/game/{gameId}";
         
@@ -193,14 +218,25 @@ public class SteamGridDbService
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _apiKey);
             
             var response = await _httpClient.SendAsync(request);
-            if (!response.IsSuccessStatusCode) return null;
+            if (!response.IsSuccessStatusCode) 
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                Log($"GetHero failed for ID {gameId}. Status: {response.StatusCode}. Content: {errorContent}");
+                return null;
+            }
 
             var json = await response.Content.ReadAsStringAsync();
             var result = JsonSerializer.Deserialize<SgdbResponse<List<SgdbImage>>>(json);
 
             if (result?.Success == true && result.Data != null && result.Data.Any())
             {
-                return result.Data.OrderByDescending(x => x.Score).FirstOrDefault()?.Url;
+                var urlResult = result.Data.OrderByDescending(x => x.Score).FirstOrDefault()?.Url;
+                Log($"Found hero for ID {gameId}: {urlResult}");
+                return urlResult;
+            }
+            else
+            {
+                Log($"No hero found for ID {gameId}");
             }
         }
         catch (Exception ex)
@@ -214,7 +250,11 @@ public class SteamGridDbService
     public async Task<string?> GetHeroImageAsync(int steamAppId)
     {
         EnsureApiKey();
-        if (string.IsNullOrEmpty(_apiKey)) return null;
+        if (string.IsNullOrEmpty(_apiKey)) 
+        {
+            Log("API Key is missing or empty.");
+            return null;
+        }
 
         var url = $"{BaseUrl}heroes/steam/{steamAppId}";
         
@@ -224,14 +264,25 @@ public class SteamGridDbService
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _apiKey);
             
             var response = await _httpClient.SendAsync(request);
-            if (!response.IsSuccessStatusCode) return null;
+            if (!response.IsSuccessStatusCode) 
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                Log($"GetHero failed for SteamAppId {steamAppId}. Status: {response.StatusCode}. Content: {errorContent}");
+                return null;
+            }
 
             var json = await response.Content.ReadAsStringAsync();
             var result = JsonSerializer.Deserialize<SgdbResponse<List<SgdbImage>>>(json);
 
             if (result?.Success == true && result.Data != null && result.Data.Any())
             {
-                return result.Data.OrderByDescending(x => x.Score).FirstOrDefault()?.Url;
+                var urlResult = result.Data.OrderByDescending(x => x.Score).FirstOrDefault()?.Url;
+                Log($"Found hero for SteamAppId {steamAppId}: {urlResult}");
+                return urlResult;
+            }
+            else
+            {
+                Log($"No hero found for SteamAppId {steamAppId}");
             }
         }
         catch (Exception ex)

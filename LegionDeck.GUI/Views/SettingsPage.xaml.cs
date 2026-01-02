@@ -145,6 +145,42 @@ public sealed partial class SettingsPage : Page
         }
     }
 
+    private async void EpicLogin_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var epicAuth = new EpicAuthService();
+            var result = await epicAuth.LoginAsync();
+            if (!string.IsNullOrEmpty(result) && result.StartsWith("EpicCode:"))
+            {
+                LibraryUpdateService.ResetUpdateFlag();
+                ShowInfoBar("Epic", "Successfully authenticated with Epic Games. You can now refresh your library.", InfoBarSeverity.Success);
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowInfoBar("Error", $"Epic Login failed: {ex.Message}", InfoBarSeverity.Error);
+        }
+    }
+
+    private async void BattleNetLogin_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var bnetAuth = new BattleNetAuthService();
+            var result = await bnetAuth.LoginAsync();
+            if (result == "BattleNetLoggedIn")
+            {
+                LibraryUpdateService.ResetUpdateFlag();
+                ShowInfoBar("Battle.net", "Successfully authenticated with Battle.net. You can now refresh your library.", InfoBarSeverity.Success);
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowInfoBar("Error", $"Battle.net Login failed: {ex.Message}", InfoBarSeverity.Error);
+        }
+    }
+
     private void ShowInfoBar(string title, string message, InfoBarSeverity severity)
     {
         FeedbackInfoBar.Title = title;

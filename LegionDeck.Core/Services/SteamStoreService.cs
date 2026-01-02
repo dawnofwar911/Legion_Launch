@@ -113,31 +113,72 @@ public class SteamStoreService
         return results;
     }
 
-    public async Task<System.Collections.Generic.Dictionary<int, string>> GetFullAppListAsync()
+    public async Task<System.Collections.Generic.Dictionary<int, string>> GetFullAppListAsync(string? apiKey = null)
     {
         var results = new System.Collections.Generic.Dictionary<int, string>();
-        var urlV2 = "https://api.steampowered.com/ISteamApps/GetAppList/v2"; // No trailing slash
-        var urlV0002 = "https://api.steampowered.com/ISteamApps/GetAppList/v0002/?format=json";
+        
+        // Use a clean HttpClient for the public API to avoid header/cookie conflicts
+        using var apiHttpClient = new HttpClient();
+        apiHttpClient.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
+
+        var urls = new List<string>();
+        
+        // Priority 1: IStoreService (Reliable, needs Key)
+        if (!string.IsNullOrEmpty(apiKey))
+        {
+            urls.Add($"https://api.steampowered.com/IStoreService/GetAppList/v1/?key={apiKey}&include_games=true&include_dlc=true&include_software=true");
+        }
+
+        // Priority 2: ISteamApps (Public, but flaky/deprecated)
+        urls.Add("https://api.steampowered.com/ISteamApps/GetAppList/v2/");
+        urls.Add("https://api.steampowered.com/ISteamApps/GetAppList/v2"); 
+        urls.Add("https://api.steampowered.com/ISteamApps/GetAppList/v0002/?format=json");
 
         string response = string.Empty;
-        
+        Exception? lastEx = null;
+
+        foreach (var url in urls)
+        {
+            try
+            {
+                response = await apiHttpClient.GetStringAsync(url);
+                if (!string.IsNullOrEmpty(response)) break;
+            }
+            catch (Exception ex)
+            {
+                lastEx = ex;
+            }
+        }
+
+        if (string.IsNullOrEmpty(response))
+        {
+             try
+             {
+                 var logPath = System.IO.Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.LocalApplicationData), "LegionDeck", "startup.log");
+                 System.IO.File.AppendAllText(logPath, $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - [SteamStoreService] All AppList endpoints failed. Last error: {lastEx?.Message}\n");
+             } catch {}
+             return results;
+        }
+
         try
         {
-            try 
+            using var doc = JsonDocument.Parse(response);
+            // Handle IStoreService format (response -> apps) or ISteamApps format (applist -> apps)
+            
+            JsonElement appsArray = default;
+            
+            if (doc.RootElement.TryGetProperty("response", out var responseRoot) && responseRoot.TryGetProperty("apps", out var storeApps))
             {
-                response = await _httpClient.GetStringAsync(urlV2);
+                appsArray = storeApps;
             }
-            catch 
+            else if (doc.RootElement.TryGetProperty("applist", out var applist) && applist.TryGetProperty("apps", out var legacyApps))
             {
-                // Fallback
-                response = await _httpClient.GetStringAsync(urlV0002);
+                appsArray = legacyApps;
             }
 
-            using var doc = JsonDocument.Parse(response);
-            if (doc.RootElement.TryGetProperty("applist", out var applist) &&
-                applist.TryGetProperty("apps", out var apps))
+            if (appsArray.ValueKind == JsonValueKind.Array)
             {
-                foreach (var app in apps.EnumerateArray())
+                foreach (var app in appsArray.EnumerateArray())
                 {
                     if (app.TryGetProperty("appid", out var id) && app.TryGetProperty("name", out var name))
                     {
@@ -155,7 +196,7 @@ public class SteamStoreService
             try
             {
                 var logPath = System.IO.Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.LocalApplicationData), "LegionDeck", "startup.log");
-                System.IO.File.AppendAllText(logPath, $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - [SteamStoreService] Error fetching full app list: {ex.Message}\n");
+                System.IO.File.AppendAllText(logPath, $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - [SteamStoreService] Error parsing app list: {ex.Message}\n");
             } catch {}
         }
         return results;
