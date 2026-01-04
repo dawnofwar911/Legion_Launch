@@ -8,6 +8,8 @@ namespace LegionDeck.GUI
     public partial class App : Application
     {
         private Window? window;
+        private LegionDeck.Core.Services.GameProcessMonitor? _processMonitor;
+        private LegionDeck.Core.Services.GameDetectionService? _gameDetectionService;
 
         /// <summary>
         /// Initializes the singleton application object.  This is the first line of authored code
@@ -16,6 +18,7 @@ namespace LegionDeck.GUI
     public App()
     {
         this.InitializeComponent();
+        this.UnhandledException += App_UnhandledException;
         System.IO.File.AppendAllText(System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LegionDeck", "startup.log"), $"--- APP START {DateTime.Now} ---\n");
     }
 
@@ -45,6 +48,11 @@ namespace LegionDeck.GUI
         {
             Log("OnLaunched started");
             
+            // Start process monitor and detection
+            _processMonitor = new LegionDeck.Core.Services.GameProcessMonitor();
+            _gameDetectionService = new LegionDeck.Core.Services.GameDetectionService(_processMonitor, new LegionDeck.Core.Services.LibraryCacheService());
+            _processMonitor.Start();
+
             // Background update of library cache - start early
             _ = Task.Run(async () => {
                 var updater = new LegionDeck.Core.Services.LibraryUpdateService();
