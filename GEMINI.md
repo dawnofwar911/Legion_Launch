@@ -97,7 +97,7 @@ Epic: com.epicgames.launcher://
 - Troubleshooting: If the app crashes on launch, check `%LOCALAPPDATA%\LegionDeck\startup.log`.
 
 7. Current Context / Active Task
-Status: Phase 3.5 in progress.
+Status: Phase 3.5 substantially complete. Transitioning to Handheld Features.
 Next Action: Game Process Monitoring (Preparation for TDP Profiles).
 
 Roadmap Progress:
@@ -111,14 +111,15 @@ Roadmap Progress:
     [x] Step 5: Unified Library View (Multi-select Filters, Advanced Sorting, Deduplication).
     [x] Step 6: UX Polish (Native Gamepad Navigation, Focus Management, Metadata Caching).
 
-[ ] Phase 3.5: Expansion & Architecture (The Foundation) - NEXT
+[x] Phase 3.5: Expansion & Architecture (The Foundation) - COMPLETE
     [x] Step 1: Refactor Launch Logic to Strategy Pattern (ILauncherStrategy).
-    [x] Step 2: Epic Games Account Sync (Full Library via Legendary/Playnite logic).
-    [x] Step 3: Battle.net Integration (Installed Game Detection).
-    [ ] Step 4: Game Process Monitoring (Preparation for TDP Profiles).
+    [x] Step 2: Epic Games Account Sync (Full Library + Naming Fixes).
+    [x] Step 3: Battle.net Integration (Cloud Sync + Registry Detection + Normalized IDs).
+    [x] Step 4: UI Polish (SelectionMode=None, Focus Persistence, InfoBar Error Handling).
 
-[ ] Phase 4: The Experience (Handheld Features) - PLANNED
-    [ ] Step 1: TDP/Power Profiles (Lenovo Legion Go Integration).
-    [ ] Step 2: Quick Settings Overlay (Brightness, Volume, Resolution).
-    [ ] Step 3: Battery Monitoring & Auto-Sleep.
-    [ ] Step 4: Controller Mapping Profiles.
+[ ] Phase 4: The Experience (Handheld Features) - NEXT
+    [ ] Step 1: Game Process Monitoring (Detect when game starts/stops).
+    [ ] Step 2: TDP/Power Profiles (Lenovo Legion Go Integration).
+    [ ] Step 3: Quick Settings Overlay (Brightness, Volume, Resolution).
+    [ ] Step 4: Battery Monitoring & Auto-Sleep.
+    [ ] Step 5: Controller Mapping Profiles.
