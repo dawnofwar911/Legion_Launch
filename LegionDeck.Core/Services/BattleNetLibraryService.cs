@@ -44,6 +44,25 @@ public class BattleNetLibraryService
         { "GRY", "Warcraft Rumble" }
     };
 
+    private static readonly Dictionary<string, string> TitleIdToProductMap = new()
+    {
+        { "5730135", "WoW" },
+        { "1465140039", "WTCG" }, 
+        { "5272175", "Pro" },    
+        { "17459", "D3" },       
+        { "4613486", "Fen" },    
+        { "1095647827", "ANBS" }, 
+        { "21298", "S2" },       
+        { "4674137", "GRY" },    
+        { "1214607983", "Hero" }, 
+        { "1146311730", "Destiny2" }, 
+        { "1329875278", "ODIN" }, 
+        { "1447645266", "VIPR" }, 
+        { "1514493267", "ZEUS" }, 
+        { "1179603525", "FORE" }, 
+        { "1396920146", "SeaOfThieves" } 
+    };
+
     public BattleNetLibraryService(ConfigService configService)
     {
         _configService = configService;
@@ -56,7 +75,7 @@ public class BattleNetLibraryService
             var path = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LegionDeck", "startup.log");
             File.AppendAllText(path, $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - [BattleNetLibraryService] {message}\n");
         }
-        catch {{ }}
+        catch { }
     }
 
     public async Task<List<LocalLibraryService.InstalledGame>> GetOwnedGamesAsync()
@@ -72,7 +91,7 @@ public class BattleNetLibraryService
             if (!refreshed)
             {
                 Log("Battle.net session refresh failed. User needs to log in again.");
-                return games;
+                throw new UnauthorizedAccessException("Battle.net session expired. Please log in again.");
             }
 
             // 1. Fetch Modern Games
@@ -99,13 +118,14 @@ public class BattleNetLibraryService
 
                         if (!string.IsNullOrEmpty(id))
                         {
-                            var name = GameIdMap.TryGetValue(id, out var mappedName) ? mappedName : apiName;
+                            var productCode = TitleIdToProductMap.TryGetValue(id, out var p) ? p : id;
+                            var name = GameIdMap.TryGetValue(productCode, out var mappedName) ? mappedName : apiName;
                             
                             if (!string.IsNullOrEmpty(name))
                             {
                                 pageGames.Add(new LocalLibraryService.InstalledGame
                                 {
-                                    Id = id,
+                                    Id = productCode,
                                     Name = name,
                                     Source = "Battle.net",
                                     IsInstalled = false
@@ -155,6 +175,7 @@ public class BattleNetLibraryService
         }
         catch (Exception ex)
         {
+            if (ex is UnauthorizedAccessException) throw;
             Log($"Error during Battle.net Account Sync: {ex.Message}");
         }
         return games;

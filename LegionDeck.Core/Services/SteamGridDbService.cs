@@ -93,7 +93,7 @@ public class SteamGridDbService
             if (result?.Success == true && result.Data != null && result.Data.Any())
             {
                 var id = result.Data.First().Id;
-                Log($"Found ID {id} for game '{{gameName}}'");
+                Log($"Found ID {id} for game '{gameName}'");
                 return id;
             }
             else

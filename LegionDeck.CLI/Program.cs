@@ -578,11 +578,19 @@ public class Program
         {
             Console.WriteLine("Synchronizing Battle.net library...");
             var bnetService = new BattleNetLibraryService(services.GetRequiredService<ConfigService>());
-            var games = await bnetService.GetOwnedGamesAsync();
-            Console.WriteLine($"Found {games.Count} owned games on Battle.net:");
-            foreach(var g in games.OrderBy(x => x.Name))
+            try 
             {
-                Console.WriteLine($"- {g.Name} (ID: {g.Id})");
+                var games = await bnetService.GetOwnedGamesAsync();
+                Console.WriteLine($"Found {games.Count} owned games on Battle.net:");
+                foreach(var g in games.OrderBy(x => x.Name))
+                {
+                    Console.WriteLine($"- {g.Name} (ID: {g.Id})");
+                }
+            }
+            catch (UnauthorizedAccessException)
+            {
+                Console.WriteLine("Battle.net session expired. Please run 'legion auth --service battlenet' to login.");
+                return 1;
             }
         }
         return 0;

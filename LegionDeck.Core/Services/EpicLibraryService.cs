@@ -16,9 +16,47 @@ public class EpicLibraryService
     private readonly ConfigService _configService;
     private const string LibraryUrl = "https://library-service.live.use1a.on.epicgames.com/library/api/public/items?includeMetadata=true&platform=Windows";
 
+    // Fallback map for games with incorrect/internal names in the library API
+    private static readonly Dictionary<string, string> _knownGameIdMap = new()
+    {
+        { "d4dd03bc745c47aaa454189a2b4525ec", "Railgrade" }, // bucatini Production
+        { "22530dcaf47c4170886e83bf0b94229d", "Voidtrain" }, // Volta
+        { "a0c3344c008d4475a9a29a7a0b6189b8", "Voidtrain" }  // AppName for Volta record
+    };
+
+    private Dictionary<string, string?> _egdataNameCache = new();
+    private readonly string _cachePath;
+
     public EpicLibraryService(ConfigService configService)
     {
         _configService = configService;
+        var cacheDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LegionDeck", "MetadataCache");
+        Directory.CreateDirectory(cacheDir);
+        _cachePath = Path.Combine(cacheDir, "epic_titles.json");
+        LoadTitleCache();
+    }
+
+    private void LoadTitleCache()
+    {
+        try
+        {
+            if (File.Exists(_cachePath))
+            {
+                var json = File.ReadAllText(_cachePath);
+                _egdataNameCache = JsonSerializer.Deserialize<Dictionary<string, string?>>(json) ?? new();
+            }
+        }
+        catch { }
+    }
+
+    private void SaveTitleCache()
+    {
+        try
+        {
+            var json = JsonSerializer.Serialize(_egdataNameCache, new JsonSerializerOptions { WriteIndented = true });
+            File.WriteAllText(_cachePath, json);
+        }
+        catch { }
     }
 
     private void Log(string message)
@@ -62,6 +100,7 @@ public class EpicLibraryService
             if (result != null)
             {
                 games = result;
+                SaveTitleCache();
                 Log($"Epic library sync complete. Found {games.Count} games.");
             }
         }
@@ -101,8 +140,6 @@ public class EpicLibraryService
                 break;
             }
 
-            Log($"Library Response (first 1000 chars): {(json.Length > 1000 ? json.Substring(0, 1000) : json)}");
-
             using var doc = JsonDocument.Parse(json);
             
             if (doc.RootElement.TryGetProperty("records", out var records))
@@ -114,15 +151,31 @@ public class EpicLibraryService
                     var type = record.TryGetProperty("recordType", out var typeProp) ? typeProp.GetString() : null;
                     if (type != "APPLICATION") continue;
 
-                    // Prioritize sandboxName for title, as observed in logs (e.g. "Sid Meier's Civilization VI")
-                    var title = record.TryGetProperty("sandboxName", out var t0) ? t0.GetString() : 
-                                record.TryGetProperty("title", out var t1) ? t1.GetString() : 
-                                record.TryGetProperty("displayName", out var t2) ? t2.GetString() : null;
+                    // Prioritize title, then displayName, then sandboxName
+                    var title = record.TryGetProperty("title", out var t0) ? t0.GetString() : 
+                                record.TryGetProperty("displayName", out var t1) ? t1.GetString() : 
+                                record.TryGetProperty("sandboxName", out var t2) ? t2.GetString() : null;
 
                     // Prioritize appName for ID, fallback to catalogItemId
-                    var appId = record.TryGetProperty("appName", out var a1) ? a1.GetString() : 
-                                record.TryGetProperty("appId", out var a2) ? a2.GetString() : 
-                                record.TryGetProperty("catalogItemId", out var a3) ? a3.GetString() : null;
+                    var catalogItemId = record.TryGetProperty("catalogItemId", out var cId) ? cId.GetString() : null;
+                    var appName = record.TryGetProperty("appName", out var aName) ? aName.GetString() : null;
+                    var productId = record.TryGetProperty("productId", out var pId) ? pId.GetString() : null;
+                    
+                    var appId = appName ?? 
+                                (record.TryGetProperty("appId", out var a2) ? a2.GetString() : null) ?? 
+                                catalogItemId;
+
+                    // 1. Check for hardcoded overrides first
+                    if (!string.IsNullOrEmpty(catalogItemId) && _knownGameIdMap.TryGetValue(catalogItemId, out var mappedName))
+                    {
+                        title = mappedName;
+                    }
+                    else if (!string.IsNullOrEmpty(appId) && _knownGameIdMap.TryGetValue(appId, out mappedName))
+                    {
+                        title = mappedName;
+                    }
+
+                    if (appId == "UnrealTournamentDev") continue; // Ignore UT Marketplace
 
                     if (!string.IsNullOrEmpty(title) && !string.IsNullOrEmpty(appId))
                     {
@@ -136,15 +189,14 @@ public class EpicLibraryService
                     }
                 }
 
-                // Deduplicate by Name (sandboxName). 
-                // DLCs often share the same sandboxName but have longer appNames (e.g. "Kinglet" vs "KingletAztec")
+                // Deduplicate by Name
                 var deduplicated = pageGames
                     .GroupBy(g => g.Name)
                     .Select(group => group.OrderBy(g => g.Id.Length).First())
                     .ToList();
 
                 games.AddRange(deduplicated);
-                Log($"Parsed {deduplicated.Count} unique games from this page (out of {pageGames.Count} total records).");
+                Log($"Parsed {deduplicated.Count} unique games from this page.");
             }
             else
             {
@@ -157,6 +209,58 @@ public class EpicLibraryService
         } while (!string.IsNullOrEmpty(nextCursor));
 
         return games;
+    }
+
+    private async Task<string?> FetchNameFromEgdataAsync(string id)
+    {
+        if (_egdataNameCache.TryGetValue(id, out var cached)) return cached;
+
+        using var client = new HttpClient();
+        
+        // Try /offers/ endpoint first
+        string? name = await TryScrapeUrl(client, $"https://egdata.app/offers/{id}");
+        
+        // If not found, try /items/ endpoint
+        if (string.IsNullOrEmpty(name))
+        {
+            name = await TryScrapeUrl(client, $"https://egdata.app/items/{id}");
+        }
+
+        if (!string.IsNullOrEmpty(name))
+        {
+            _egdataNameCache[id] = name;
+            return name;
+        }
+        
+        // Do not cache nulls, so we retry next time
+        return null;
+    }
+
+    private async Task<string?> TryScrapeUrl(HttpClient client, string url)
+    {
+        try
+        {
+            var html = await client.GetStringAsync(url);
+            
+            // <title>Game Name | egdata.app</title>
+            // For items page it might be "Game Name | Item | egdata.app" or similar
+            var match = System.Text.RegularExpressions.Regex.Match(html, @"<title>(.*?) \|.*egdata\.app</title>");
+            if (match.Success)
+            {
+                var name = WebUtility.HtmlDecode(match.Groups[1].Value.Trim());
+                Log($"Scraped name '{name}' from {url}");
+                return name;
+            }
+            else
+            {
+                 Log($"Regex failed for {url}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Log($"Failed to scrape {url}: {ex.Message}");
+        }
+        return null;
     }
 
     private async Task<EpicTokens?> LoadTokensAsync()

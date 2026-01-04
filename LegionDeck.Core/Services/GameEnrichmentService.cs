@@ -35,7 +35,7 @@ public class GameEnrichmentService
 
     private string CleanGameName(string name)
     {
-        name = name.Replace("™", "").Replace("®", "").Trim();
+        name = name.Replace("™", "").Replace("®", "").Replace("\u00A0", " ").Trim();
         // Remove common edition/platform suffixes only if they are at the end
         name = System.Text.RegularExpressions.Regex.Replace(name, @"\s*\b(GOTY|Game of the Year|Definitive|Ultimate|Deluxe|Standard|Collector's|Remastered|Classic|Edition|PC|Xbox|PlayStation|Switch)\b\s*$", "", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
         // Remove text in parentheses if it's not a year (e.g., (2020), but not (Ultimate Edition))
@@ -133,7 +133,7 @@ public class GameEnrichmentService
 
                         if (!string.IsNullOrEmpty(sgdbCover))
                         {
-                            _metadataService.SetCover(idStr, sgdbCover, false);
+                            _metadataService.SetCover(idStr, sgdbCover, true);
                             var coverDetails = new SteamStoreService.SteamStoreDetails 
                             { 
                                 VerticalCover = sgdbCover, 
