@@ -39,10 +39,10 @@ public class LenovoPowerService
 
     public static bool SetPowerMode(PowerMode mode)
     {
-        // Safety Check: Avoid Performance mode on low battery to prevent freezes
-        if (mode == PowerMode.Performance && GetBatteryPercentage() < 20)
+        // Safety Check: Avoid power mode changes on low battery to prevent potential freezes/instability
+        if (GetBatteryPercentage() < 30)
         {
-            Log("Performance mode blocked: Battery below 20%.");
+            Log($"Power mode change to {mode} blocked: Battery below 30%.");
             return false;
         }
 
