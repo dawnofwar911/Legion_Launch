@@ -29,7 +29,7 @@
                 <NavigationViewItem Content="Settings" Tag="Settings" Icon="Setting" />
             </NavigationView.FooterMenuItems>
 
-            <Frame x:Name="ContentFrame" IsTabStop="False" />
+            <Frame x:Name="ContentFrame" Navigated="ContentFrame_Navigated" IsTabStop="False" />
         </NavigationView>
     </Grid>
 </Page>

@@ -33,6 +33,8 @@ public sealed partial class WishlistPage : Page
     private readonly GameEnrichmentService _enrichmentService;
     
     private readonly string _cachePath;
+    private int _lastSelectedIndex = -1;
+    private bool _isDataLoaded = false;
 
     public WishlistPage()
     {
@@ -68,7 +70,19 @@ public sealed partial class WishlistPage : Page
         {
             // Restore focus to grid when coming back
             await Task.Delay(100);
-            WishlistGridView.Focus(FocusState.Programmatic);
+            
+            if (_lastSelectedIndex >= 0 && _lastSelectedIndex < WishlistGridView.Items.Count)
+            {
+                var item = WishlistGridView.Items[_lastSelectedIndex];
+                WishlistGridView.ScrollIntoView(item);
+                
+                var container = WishlistGridView.ContainerFromIndex(_lastSelectedIndex) as Control;
+                container?.Focus(FocusState.Keyboard);
+            }
+            else
+            {
+                WishlistGridView.Focus(FocusState.Keyboard);
+            }
         }
     }
 
@@ -76,6 +90,8 @@ public sealed partial class WishlistPage : Page
     {
         try
         {
+            if (_isDataLoaded) return;
+
             Log("WishlistPage_Loaded started");
             await LoadFromCache();
             
@@ -83,6 +99,10 @@ public sealed partial class WishlistPage : Page
             {
                 Log("Cache empty or not found.");
                 _ = SyncWishlistAsync();
+            }
+            else
+            {
+                _isDataLoaded = true;
             }
             
             // Focus item container
@@ -287,6 +307,7 @@ public sealed partial class WishlistPage : Page
 
             await Task.WhenAll(tasks);
             await SaveToCache(processedItems.ToList());
+            _isDataLoaded = true;
             Log("Sync completed successfully");
             
             // Start background enrichment
@@ -351,26 +372,31 @@ public sealed partial class WishlistPage : Page
     {
         if (e.ClickedItem is SteamWishlistItemViewModel vm)
         {
-            Log($"Wishlist item clicked: {vm.Name}. Navigating to details.");
+            _lastSelectedIndex = WishlistGridView.Items.IndexOf(vm);
+            Log($"Wishlist item clicked: {vm.Name} (Index: {_lastSelectedIndex}). Navigating to details.");
             this.Frame.Navigate(typeof(GameDetailsPage), vm);
         }
     }
 
     private void WishlistGridView_GettingFocus(UIElement sender, Microsoft.UI.Xaml.Input.GettingFocusEventArgs args)
     {
-        // If the focus is moving TO the GridView itself (not an item inside it)
-        // We redirect it to the selected item or first item.
         if (args.NewFocusedElement == WishlistGridView && WishlistGridView.Items.Count > 0)
         {
-            if (WishlistGridView.SelectedIndex < 0) WishlistGridView.SelectedIndex = 0;
-            
-            var container = WishlistGridView.ContainerFromIndex(WishlistGridView.SelectedIndex) as Control;
+            // If we have a saved index, use it
+            int index = _lastSelectedIndex >= 0 ? _lastSelectedIndex : 0;
+            var container = WishlistGridView.ContainerFromIndex(index) as Control;
             if (container != null)
             {
                 args.TrySetNewFocusedElement(container);
                 args.Handled = true;
             }
         }
+    }
+
+    private void WishlistGridView_LostFocus(object sender, RoutedEventArgs e)
+    {
+        // No explicit selected index to clear if SelectionMode="None", 
+        // but we ensure focus restoration logic is ready for return.
     }
 
     private void WishlistGridView_KeyDown(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs e)

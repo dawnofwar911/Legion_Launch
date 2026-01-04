@@ -28,11 +28,11 @@
             </AppBarButton>
         </CommandBar>
 
-        <GridView Grid.Row="1"
+        <GridView Grid.Row="2"
                   x:Name="WishlistGridView"
                   Margin="12"
                   Padding="0,0,0,24"
-                  SelectionMode="Single"
+                  SelectionMode="None"
                   IsItemClickEnabled="True"
                   ItemClick="WishlistGridView_ItemClick"
                   XYFocusKeyboardNavigation="Enabled"

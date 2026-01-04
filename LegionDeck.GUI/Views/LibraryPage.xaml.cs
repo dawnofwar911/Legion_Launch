@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using Microsoft.UI.Xaml.Input;
 
 namespace LegionDeck.GUI.Views;
 
@@ -27,6 +28,7 @@ public sealed partial class LibraryPage : Page
     private bool _isSyncing = false;
     private readonly System.Threading.SemaphoreSlim _refreshSemaphore = new(1, 1);
     private System.Threading.CancellationTokenSource? _enrichmentCts;
+    private int _lastSelectedIndex = -1;
 
     public LibraryPage()
     {
@@ -40,16 +42,42 @@ public sealed partial class LibraryPage : Page
         this.Loaded += LibraryPage_Loaded;
     }
 
-    protected override void OnNavigatedTo(Microsoft.UI.Xaml.Navigation.NavigationEventArgs e)
+    protected override async void OnNavigatedTo(Microsoft.UI.Xaml.Navigation.NavigationEventArgs e)
     {
         base.OnNavigatedTo(e);
         _isReturning = (e.NavigationMode == Microsoft.UI.Xaml.Navigation.NavigationMode.Back);
+
+        if (_isReturning)
+        {
+            // Restore focus to grid when coming back
+            await Task.Delay(100);
+            
+            if (_lastSelectedIndex >= 0 && _lastSelectedIndex < LibraryGridView.Items.Count)
+            {
+                var item = LibraryGridView.Items[_lastSelectedIndex];
+                LibraryGridView.ScrollIntoView(item);
+                
+                var container = LibraryGridView.ContainerFromIndex(_lastSelectedIndex) as Control;
+                container?.Focus(FocusState.Keyboard);
+            }
+            else
+            {
+                FocusGameGrid();
+            }
+        }
     }
 
     private async void LibraryPage_Loaded(object sender, RoutedEventArgs e)
     {
         Log($"LibraryPage_Loaded (Returning: {_isReturning})");
-        if (!_isDataLoaded) await RefreshLibraryAsync(forceUpdate: false);
+        if (!_isDataLoaded) 
+        {
+            await RefreshLibraryAsync(forceUpdate: false);
+        }
+        else if (!_isReturning)
+        {
+            FocusGameGrid();
+        }
         _isReturning = false;
     }
 
@@ -90,6 +118,21 @@ public sealed partial class LibraryPage : Page
                     await updater.UpdateAllAsync(); // Syncs all clouds
                 });
                 _isSyncing = false;
+
+                // Check for errors to display in InfoBar
+                this.DispatcherQueue.TryEnqueue(() => {
+                    if (LibraryUpdateService.LastErrors.TryGetValue("Battle.net", out var bnetError))
+                    {
+                        SyncInfoBar.Message = bnetError;
+                        SyncInfoBar.Severity = InfoBarSeverity.Warning;
+                        SyncInfoBar.Title = "Battle.net Sync Warning";
+                        SyncInfoBar.IsOpen = true;
+                    }
+                    else
+                    {
+                        SyncInfoBar.IsOpen = false;
+                    }
+                });
             }
 
             var steamGames = await _cacheService.LoadLibraryAsync("Steam");
@@ -100,26 +143,17 @@ public sealed partial class LibraryPage : Page
             var bnetGames = await _cacheService.LoadLibraryAsync("Battle.net");
 
             // 3. Merge
-            // We use a dictionary to merge duplicates (e.g. Installed vs Cloud version of same game)
-            // Priority: Installed > Cloud
             var merged = new Dictionary<string, LocalLibraryService.InstalledGame>();
 
             void MergeList(List<LocalLibraryService.InstalledGame> list)
             {
                 foreach (var g in list)
                 {
-                    // Standard Key: Source + ID
                     var key = $"{g.Source}_{g.Id}";
-                    
-                    // Special handling for Xbox duplicates (Game Pass vs Installed often have different IDs)
                     if (g.Source == "Xbox")
                     {
                         var existingXbox = merged.Values.FirstOrDefault(x => x.Source == "Xbox" && x.Name.Equals(g.Name, StringComparison.OrdinalIgnoreCase));
-                        if (existingXbox != null)
-                        {
-                            // If we found a name match, use its key to merge/overwrite
-                            key = $"{existingXbox.Source}_{existingXbox.Id}";
-                        }
+                        if (existingXbox != null) key = $"{existingXbox.Source}_{existingXbox.Id}";
                     }
 
                     if (!merged.ContainsKey(key))
@@ -128,7 +162,6 @@ public sealed partial class LibraryPage : Page
                     }
                     else if (g.IsInstalled) 
                     {
-                        // If we found an installed version, overwrite the cloud one
                         merged[key] = g; 
                     }
                 }
@@ -139,6 +172,7 @@ public sealed partial class LibraryPage : Page
             _libraryService.UpdateInstallationStatus(ubiGames, localGames);
             _libraryService.UpdateInstallationStatus(eaGames, localGames);
             _libraryService.UpdateInstallationStatus(epicGames, localGames);
+            _libraryService.UpdateInstallationStatus(bnetGames, localGames);
 
             MergeList(localGames);
             MergeList(steamGames);
@@ -165,22 +199,14 @@ public sealed partial class LibraryPage : Page
                         if (!string.IsNullOrEmpty(details.VerticalCover))
                         {
                             vm.ImgCapsule = details.VerticalCover + $"?t={DateTimeOffset.Now.ToUnixTimeSeconds()}";
-                            GameEnrichmentService.Log($"Updated ImgCapsule for {vm.Name} ({id}) with {details.VerticalCover}");
-                        }
-                        else
-                        {
-                            GameEnrichmentService.Log($"No VerticalCover in details for {vm.Name} ({id}).");
                         }
                         if (!string.IsNullOrEmpty(details.Name)) vm.Name = details.Name;
-                    }
-                    else
-                    {
-                        GameEnrichmentService.Log($"Could not find ViewModel for {id}.");
                     }
                 });
             }, _enrichmentCts.Token);
 
             _isDataLoaded = true;
+            if (!_isReturning) FocusGameGrid();
         } 
         finally 
         { 
@@ -208,11 +234,9 @@ public sealed partial class LibraryPage : Page
 
         var filtered = _allGames.Where(g =>
         {
-            // Status Filter
             bool statusMatch = (showInstalled && g.IsInstalled) || (showCloud && !g.IsInstalled);
             if (!showInstalled && !showCloud) statusMatch = true;
 
-            // Source Filter
             bool sourceMatch = false;
             if (sourceSteam && g.Source.Contains("Steam")) sourceMatch = true;
             if (sourceXbox && g.Source.Contains("Xbox")) sourceMatch = true;
@@ -223,7 +247,6 @@ public sealed partial class LibraryPage : Page
             
             if (!sourceSteam && !sourceXbox && !sourceUbi && !sourceEA && !sourceEpic && !sourceBNet) sourceMatch = true;
 
-            // Ownership Filter
             bool ownerMatch = false;
             if (stateClaimed && !g.IsNotRedeemed) ownerMatch = true;
             if (stateUnclaimed && g.IsNotRedeemed) ownerMatch = true;
@@ -236,23 +259,26 @@ public sealed partial class LibraryPage : Page
         });
 
         InstalledGames.Clear();
-        foreach (var vm in filtered)
-        {
-            InstalledGames.Add(vm);
-        }
+        foreach (var vm in filtered) InstalledGames.Add(vm);
 
         if (NoGamesText != null) NoGamesText.Visibility = InstalledGames.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private bool IsFilterChecked(string tag)
     {
-        if (this.Content is Grid g && g.Children.Count > 1 && g.Children[1] is ScrollViewer sv && sv.Content is StackPanel sp)
+        if (this.Content is Grid g)
         {
-            foreach(var child in sp.Children)
+            foreach(var gridChild in g.Children)
             {
-                if (child is Microsoft.UI.Xaml.Controls.Primitives.ToggleButton tb && tb.Tag?.ToString() == tag)
+                if (gridChild is ScrollViewer sv && sv.Content is StackPanel sp)
                 {
-                    return tb.IsChecked ?? false;
+                    foreach(var child in sp.Children)
+                    {
+                        if (child is Microsoft.UI.Xaml.Controls.Primitives.ToggleButton tb && tb.Tag?.ToString() == tag)
+                        {
+                            return tb.IsChecked ?? false;
+                        }
+                    }
                 }
             }
         }
@@ -262,7 +288,7 @@ public sealed partial class LibraryPage : Page
     private void SortByName_Click(object sender, RoutedEventArgs e) {
         bool asc = (sender as MenuFlyoutItem)?.Tag?.ToString() == "NameAsc";
         _allGames = asc ? _allGames.OrderBy(g => g.Name).ToList() : _allGames.OrderByDescending(g => g.Name).ToList();
-        ApplyAdvancedFilters(); // Re-apply filter to update view
+        ApplyAdvancedFilters();
     }
 
     private void SortBySource_Click(object sender, RoutedEventArgs e) {
@@ -271,32 +297,39 @@ public sealed partial class LibraryPage : Page
     }
 
     private void SearchBox_TextChanged(AutoSuggestBox sender, AutoSuggestBoxTextChangedEventArgs args) { if (args.Reason == AutoSuggestionBoxTextChangeReason.UserInput) ApplyAdvancedFilters(); }
-    private async void LibraryGridView_ItemClick(object sender, ItemClickEventArgs e) { if (e.ClickedItem is LibraryGameViewModel vm) this.Frame.Navigate(typeof(GameDetailsPage), vm); }
+    
+    private void LibraryGridView_ItemClick(object sender, ItemClickEventArgs e) 
+    { 
+        if (e.ClickedItem is LibraryGameViewModel vm) 
+        {
+            _lastSelectedIndex = LibraryGridView.Items.IndexOf(vm);
+            this.Frame.Navigate(typeof(GameDetailsPage), vm); 
+        }
+    }
     
     private void SearchBox_QuerySubmitted(AutoSuggestBox sender, AutoSuggestBoxQuerySubmittedEventArgs args) { ApplyAdvancedFilters(); }
     
-    private void LibraryGridView_GettingFocus(UIElement sender, Microsoft.UI.Xaml.Input.GettingFocusEventArgs args)
+    private void LibraryGridView_GettingFocus(UIElement sender, GettingFocusEventArgs args)
     {
         if (args.NewFocusedElement == LibraryGridView && LibraryGridView.Items.Count > 0)
         {
-            // If index is -1, select 0. If it has a value, it keeps it (but we clear it on LostFocus now)
-            if (LibraryGridView.SelectedIndex < 0) LibraryGridView.SelectedIndex = 0;
-            var container = LibraryGridView.ContainerFromIndex(LibraryGridView.SelectedIndex) as Control;
+            int index = _lastSelectedIndex >= 0 ? _lastSelectedIndex : 0;
+            var container = LibraryGridView.ContainerFromIndex(index) as Control;
             if (container != null) { args.TrySetNewFocusedElement(container); args.Handled = true; }
         }
     }
 
-    private void LibraryGridView_LostFocus(object sender, RoutedEventArgs e)
-    {
-        // Clear selection so when we come back, we start fresh (usually top-left due to GettingFocus logic)
-        LibraryGridView.SelectedIndex = -1;
-    }
+    private void LibraryGridView_LostFocus(object sender, RoutedEventArgs e) { }
 
-    private async void LibraryGridView_PreviewKeyDown(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs e)
+    private async void LibraryGridView_PreviewKeyDown(object sender, KeyRoutedEventArgs e)
     {
         if (e.Key == Windows.System.VirtualKey.GamepadX || e.Key == Windows.System.VirtualKey.X)
         {
-            if (LibraryGridView.SelectedItem is LibraryGameViewModel vm) await _libraryService.LaunchGameAsync(vm.GameData);
+            var focused = FocusManager.GetFocusedElement(this.XamlRoot);
+            if (focused is GridViewItem gvi && gvi.Content is LibraryGameViewModel vm)
+            {
+                await _libraryService.LaunchGameAsync(vm.GameData);
+            }
             e.Handled = true;
         }
         else if (e.Key == Windows.System.VirtualKey.GamepadY || e.Key == Windows.System.VirtualKey.Y)
@@ -325,9 +358,8 @@ public sealed partial class LibraryPage : Page
                 if (gameId.HasValue) {
                     var coverUrl = await _sgdbService.GetVerticalCoverByGameIdAsync(gameId.Value);
                     if (!string.IsNullOrEmpty(coverUrl)) { UpdateGameCover(vm, coverUrl); return; }
-                    else { GameEnrichmentService.Log($"No SGDB cover found for GameId {gameId.Value} (from '{vm.Name}')"); }
-                } else { GameEnrichmentService.Log($"No SGDB GameId found for '{vm.Name}'"); }
-            } catch (Exception ex) { GameEnrichmentService.Log($"Error in Image_ImageFailed SGDB lookup for '{vm.Name}': {ex.Message}"); }
+                }
+            } catch { }
         }
     }
 
@@ -353,18 +385,13 @@ public sealed partial class LibraryPage : Page
         {
             if (LibraryGridView.Items.Count > 0)
             {
-                // If nothing selected, select first
-                if (LibraryGridView.SelectedIndex < 0) LibraryGridView.SelectedIndex = 0;
-                
-                var container = LibraryGridView.ContainerFromIndex(LibraryGridView.SelectedIndex) as Control;
-                container?.Focus(FocusState.Programmatic);
+                int index = _lastSelectedIndex >= 0 ? _lastSelectedIndex : 0;
+                var container = LibraryGridView.ContainerFromIndex(index) as Control;
+                container?.Focus(FocusState.Keyboard);
             }
             else
             {
-                // If empty, focus the filter bar
-                // We need to find the first button in the filter bar.
-                // For now, focus the page itself so D-Pad can move to filters.
-                this.Focus(FocusState.Programmatic);
+                this.Focus(FocusState.Keyboard);
             }
         });
     }

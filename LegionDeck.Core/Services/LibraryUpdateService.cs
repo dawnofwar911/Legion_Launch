@@ -16,6 +16,8 @@ public class LibraryUpdateService
     private readonly LibraryCacheService _cacheService = new();
     private readonly LocalLibraryService _localService = new();
 
+    public static Dictionary<string, string> LastErrors { get; } = new(StringComparer.OrdinalIgnoreCase);
+
     public LibraryUpdateService()
     {
         _steamService = new SteamLibraryService(new ConfigService());
@@ -39,6 +41,7 @@ public class LibraryUpdateService
         try 
         {
             Log($"UpdateAllAsync starting (Source: {source ?? "ALL"})...");
+            LastErrors.Clear();
             var localGames = await _localService.GetInstalledGamesAsync();
 
             // 1. Steam
@@ -50,7 +53,10 @@ public class LibraryUpdateService
                     var list = items.Select(i => new LocalLibraryService.InstalledGame { Id = i.AppId.ToString(), Name = i.Name, Source = "Steam", IsInstalled = false }).ToList();
                     _localService.UpdateInstallationStatus(list, localGames);
                     await _cacheService.SaveLibraryAsync("Steam", list);
-                } catch (Exception ex) { Log($"Steam Sync Error: {ex.Message}"); }
+                } catch (Exception ex) { 
+                    Log($"Steam Sync Error: {ex.Message}"); 
+                    LastErrors["Steam"] = ex.Message;
+                }
             }
 
             // 2. Xbox
@@ -63,7 +69,10 @@ public class LibraryUpdateService
                     var list = catalog.Select(item => new LocalLibraryService.InstalledGame { Id = item.SteamAppId ?? item.Name, Name = item.Name, Source = "Xbox", IsInstalled = false }).ToList();
                     _localService.UpdateInstallationStatus(list, localGames);
                     await _cacheService.SaveLibraryAsync("Xbox", list);
-                } catch (Exception ex) { Log($"Xbox Sync Error: {ex.Message}"); }
+                } catch (Exception ex) { 
+                    Log($"Xbox Sync Error: {ex.Message}"); 
+                    LastErrors["Xbox"] = ex.Message;
+                }
             }
 
             // 3. Ubisoft
@@ -82,7 +91,10 @@ public class LibraryUpdateService
                     }).ToList();
                     _localService.UpdateInstallationStatus(list, localGames);
                     await _cacheService.SaveLibraryAsync("Ubisoft", list);
-                } catch (Exception ex) { Log($"Ubisoft Sync Error: {ex.Message}"); }
+                } catch (Exception ex) { 
+                    Log($"Ubisoft Sync Error: {ex.Message}"); 
+                    LastErrors["Ubisoft"] = ex.Message;
+                }
             }
 
             // 4. EA
@@ -198,7 +210,10 @@ public class LibraryUpdateService
 
                     await _cacheService.SaveLibraryAsync("EA", merged);
                     Log($"EA Sync Complete. Merged {merged.Count} games.");
-                } catch (Exception ex) { Log($"EA Sync Error: {ex.Message}"); }
+                } catch (Exception ex) { 
+                    Log($"EA Sync Error: {ex.Message}"); 
+                    LastErrors["EA"] = ex.Message;
+                }
             }
 
             // 5. Epic
@@ -212,7 +227,10 @@ public class LibraryUpdateService
                     _localService.UpdateInstallationStatus(list, localGames);
                     await _cacheService.SaveLibraryAsync("Epic", list);
                     Log($"Epic Sync Complete. Found {list.Count} games.");
-                } catch (Exception ex) { Log($"Epic Sync Error: {ex.Message}"); }
+                } catch (Exception ex) { 
+                    Log($"Epic Sync Error: {ex.Message}"); 
+                    LastErrors["Epic"] = ex.Message;
+                }
             }
 
             // 6. Battle.net
@@ -226,7 +244,13 @@ public class LibraryUpdateService
                     _localService.UpdateInstallationStatus(list, localGames);
                     await _cacheService.SaveLibraryAsync("Battle.net", list);
                     Log($"Battle.net Sync Complete. Found {list.Count} games.");
-                } catch (Exception ex) { Log($"Battle.net Sync Error: {ex.Message}"); }
+                } catch (UnauthorizedAccessException) {
+                    Log("Battle.net session expired.");
+                    LastErrors["Battle.net"] = "Session expired. Please log in again from Settings.";
+                } catch (Exception ex) { 
+                    Log($"Battle.net Sync Error: {ex.Message}"); 
+                    LastErrors["Battle.net"] = ex.Message;
+                }
             }
 
             if (source == null) _hasUpdated = true;

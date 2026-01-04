@@ -42,12 +42,14 @@ public class BattleNetAuthService : IAuthService
             {
                 try
                 {
-                    Log("Starting interactive Battle.net LoginAsync thread (direct to refresh endpoint)");
+                    Log("Starting interactive Battle.net LoginAsync thread (standard login page)");
                     Application.SetHighDpiMode(HighDpiMode.SystemAware);
                     Application.EnableVisualStyles();
                     Application.SetCompatibleTextRenderingDefault(false);
 
-                    var form = new BattleNetLoginForm(tcs, BaseUrl + "/oauth2/authorization/account-settings"); 
+                    // Use standard login page with action=log-in which usually has 'Stay Logged In' checkbox
+                    var target = BaseUrl + "/login/en/?action=log-in&ref=" + Uri.EscapeDataString(BaseUrl + "/overview");
+                    var form = new BattleNetLoginForm(tcs, target); 
                     Application.Run(form);
                     Log("Interactive Battle.net login form closed");
                 }

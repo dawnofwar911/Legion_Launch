@@ -50,22 +50,22 @@ public sealed partial class MainPage : Page
                         NavView.IsPaneOpen = !NavView.IsPaneOpen;
                         if (NavView.IsPaneOpen) 
                         {
-                            // Try to focus the selected item
+                            // Try to focus the selected item container
                             if (NavView.SelectedItem != null)
                             {
                                 var container = NavView.ContainerFromMenuItem(NavView.SelectedItem) as Control;
                                 if (container != null) 
                                 {
-                                    container.Focus(FocusState.Programmatic);
+                                    container.Focus(FocusState.Keyboard);
                                     break;
                                 }
                             }
-                            // Fallback: Focus the toggle button or the NavView itself
-                            NavView.Focus(FocusState.Programmatic);
+                            NavView.Focus(FocusState.Keyboard);
                         }
                         else 
                         {
                             if (ContentFrame.Content is LibraryPage libPage) libPage.FocusGameGrid();
+                            else if (ContentFrame.Content is WishlistPage wishPage) { wishPage.Focus(FocusState.Keyboard); }
                             else ContentFrame.Focus(FocusState.Programmatic);
                         }
                         break;
@@ -146,7 +146,11 @@ public sealed partial class MainPage : Page
         {
             var item = NavView.MenuItems.OfType<NavigationViewItem>().FirstOrDefault(i => i.Tag?.ToString() == tag) 
                     ?? NavView.FooterMenuItems.OfType<NavigationViewItem>().FirstOrDefault(i => i.Tag?.ToString() == tag);
-            if (item != null) NavView.SelectedItem = item;
+            
+            if (item != null && NavView.SelectedItem != item)
+            {
+                NavView.SelectedItem = item;
+            }
         }
     }
 
@@ -194,12 +198,12 @@ public sealed partial class MainPage : Page
         if (e.Key == Windows.System.VirtualKey.GamepadB || e.Key == Windows.System.VirtualKey.Escape)
         {
             if (ContentFrame.CanGoBack) { ContentFrame.GoBack(); e.Handled = true; } 
-            else { NavView.IsPaneOpen = true; NavView.Focus(FocusState.Programmatic); e.Handled = true; }
+            else { NavView.IsPaneOpen = true; NavView.Focus(FocusState.Keyboard); e.Handled = true; }
         }
         else if (e.Key == Windows.System.VirtualKey.GamepadMenu || e.Key == Windows.System.VirtualKey.M)
         {
             NavView.IsPaneOpen = !NavView.IsPaneOpen;
-            if (NavView.IsPaneOpen) NavView.Focus(FocusState.Programmatic); else ContentFrame.Focus(FocusState.Programmatic);
+            if (NavView.IsPaneOpen) NavView.Focus(FocusState.Keyboard); else ContentFrame.Focus(FocusState.Keyboard);
             e.Handled = true;
         }
     }
