@@ -36,6 +36,7 @@ public class LocalLibraryService
         public string? LaunchUri { get; set; }
         public string? BackgroundImage { get; set; }
         public bool IsInstalled { get; set; } = true;
+        public string? MainExecutable { get; set; }
     }
 
     public async Task LaunchGameAsync(InstalledGame game)
@@ -494,30 +495,60 @@ public class LocalLibraryService
                 var content = File.ReadAllLines(file);
                 string? name = null;
                 string? appId = null;
+                string? installDirName = null;
 
                 foreach (var line in content)
                 {
                     if (line.Contains("\"name\"")) name = line.Split('"')[3];
                     if (line.Contains("\"appid\"")) appId = line.Split('"')[3];
+                    if (line.Contains("\"installdir\"")) installDirName = line.Split('"')[3];
                 }
 
-                if (name != null && appId != null && appId != "228980") // Filter out redistributables
+                if (name != null && appId != null && appId != "228980") 
                 {
                     if (!IsGameValid(name)) continue;
 
+                    string fullInstallPath = Path.Combine(path, "common", installDirName ?? name);
+                    
                     games.Add(new InstalledGame
                     {
                         Id = appId,
                         Name = name,
                         Source = "Steam",
-                        InstallPath = Path.Combine(path, "common", name),
-                        LaunchUri = $"steam://run/{appId}"
+                        InstallPath = fullInstallPath,
+                        LaunchUri = $"steam://run/{appId}",
+                        MainExecutable = FindMainExecutable(fullInstallPath)
                     });
                 }
             }
             catch { }
         }
         return games;
+    }
+
+    private string? FindMainExecutable(string path)
+    {
+        if (!Directory.Exists(path)) return null;
+        try
+        {
+            // Heuristic: The largest EXE in the root or common subfolders is usually the game.
+            var files = Directory.GetFiles(path, "*.exe", SearchOption.AllDirectories)
+                .Select(f => new FileInfo(f))
+                .OrderByDescending(f => f.Length)
+                .ToList();
+
+            // Filter out common launcher/redist/crash reporter names
+            var filtered = files.Where(f => 
+                !f.Name.Contains("launcher", StringComparison.OrdinalIgnoreCase) && 
+                !f.Name.Contains("crash", StringComparison.OrdinalIgnoreCase) &&
+                !f.Name.Contains("unity", StringComparison.OrdinalIgnoreCase) &&
+                !f.Name.Contains("unins", StringComparison.OrdinalIgnoreCase) &&
+                !f.Name.Contains("setup", StringComparison.OrdinalIgnoreCase) &&
+                !f.Name.Contains("redist", StringComparison.OrdinalIgnoreCase)).ToList();
+
+            return filtered.FirstOrDefault()?.Name;
+        }
+        catch { return null; }
     }
 
     public List<InstalledGame> GetInstalledEpicGames()

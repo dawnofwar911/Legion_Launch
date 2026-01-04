@@ -7,6 +7,7 @@ namespace LegionDeck.GUI
     /// </summary>
     public partial class App : Application
     {
+        public static LegionDeck.Core.Services.ConfigService Config { get; private set; }
         private Window? window;
         private LegionDeck.Core.Services.GameProcessMonitor? _processMonitor;
         private LegionDeck.Core.Services.GameDetectionService? _gameDetectionService;
@@ -17,6 +18,7 @@ namespace LegionDeck.GUI
         /// </summary>
     public App()
     {
+        Config = new LegionDeck.Core.Services.ConfigService();
         this.InitializeComponent();
         this.UnhandledException += App_UnhandledException;
         System.IO.File.AppendAllText(System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LegionDeck", "startup.log"), $"--- APP START {DateTime.Now} ---\n");
@@ -43,14 +45,16 @@ namespace LegionDeck.GUI
         /// Invoked when the application is launched normally by the end user.  Other entry points
         /// will be used such as when the application is launched to open a specific file.
         /// </summary>
-        /// <param name="e">Details about the launch request and process.</param>
         protected override void OnLaunched(LaunchActivatedEventArgs e)
         {
             Log("OnLaunched started");
             
+            var cache = new LegionDeck.Core.Services.LibraryCacheService();
+
             // Start process monitor and detection
             _processMonitor = new LegionDeck.Core.Services.GameProcessMonitor();
-            _gameDetectionService = new LegionDeck.Core.Services.GameDetectionService(_processMonitor, new LegionDeck.Core.Services.LibraryCacheService());
+            _gameDetectionService = new LegionDeck.Core.Services.GameDetectionService(_processMonitor, cache, Config);
+            
             _processMonitor.Start();
 
             // Background update of library cache - start early

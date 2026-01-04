@@ -1,0 +1,84 @@
+<Window
+    x:Class="LegionDeck.GUI.Views.QuickSettingsOverlay"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d">
+
+    <Grid Background="{ThemeResource ApplicationPageBackgroundThemeBrush}" CornerRadius="12,0,0,12" BorderThickness="1,0,0,0" BorderBrush="{ThemeResource SystemControlForegroundBaseLowBrush}">
+        <StackPanel Spacing="20" Padding="20">
+            <TextBlock Text="Quick Settings" FontSize="20" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,0,0,10" />
+
+            <!-- Volume -->
+            <StackPanel Spacing="8">
+                <StackPanel Orientation="Horizontal" Spacing="10">
+                    <FontIcon Glyph="&#xE767;" FontSize="16" />
+                    <TextBlock Text="Volume" FontWeight="SemiBold" />
+                </StackPanel>
+                <Slider x:Name="VolumeSlider" Minimum="0" Maximum="100" TickFrequency="1" SnapsTo="Ticks" />
+            </StackPanel>
+
+            <!-- Brightness -->
+            <StackPanel Spacing="8">
+                <StackPanel Orientation="Horizontal" Spacing="10">
+                    <FontIcon Glyph="&#xE706;" FontSize="16" />
+                    <TextBlock Text="Brightness" FontWeight="SemiBold" />
+                </StackPanel>
+                <Slider x:Name="BrightnessSlider" Minimum="0" Maximum="100" TickFrequency="1" SnapsTo="Ticks" ValueChanged="BrightnessSlider_ValueChanged" />
+            </StackPanel>
+
+            <!-- Power Profiles -->
+            <StackPanel Spacing="8">
+                <StackPanel Orientation="Horizontal" Spacing="10">
+                    <FontIcon Glyph="&#xE945;" FontSize="16" />
+                    <TextBlock Text="Power Profile" FontWeight="SemiBold" />
+                </StackPanel>
+                <Grid x:Name="PowerGrid" ColumnDefinitions="*,*,*">
+                    <Button Grid.Column="0" Tag="1" Click="PowerButton_Click" HorizontalAlignment="Stretch" Margin="2">
+                        <ToolTipService.ToolTip><TextBlock Text="Quiet" /></ToolTipService.ToolTip>
+                        <FontIcon Glyph="&#xE706;" />
+                    </Button>
+                    <Button Grid.Column="1" Tag="2" Click="PowerButton_Click" HorizontalAlignment="Stretch" Margin="2">
+                        <ToolTipService.ToolTip><TextBlock Text="Balanced" /></ToolTipService.ToolTip>
+                        <FontIcon Glyph="&#xEC4A;" />
+                    </Button>
+                    <Button Grid.Column="2" Tag="3" Click="PowerButton_Click" HorizontalAlignment="Stretch" Margin="2">
+                        <ToolTipService.ToolTip><TextBlock Text="Performance" /></ToolTipService.ToolTip>
+                        <FontIcon Glyph="&#xE945;" />
+                    </Button>
+                </Grid>
+            </StackPanel>
+
+            <!-- Display Settings -->
+            <StackPanel Spacing="8">
+                <StackPanel Orientation="Horizontal" Spacing="10">
+                    <FontIcon Glyph="&#xE7F4;" FontSize="16" />
+                    <TextBlock Text="Resolution" FontWeight="SemiBold" />
+                </StackPanel>
+                <Grid x:Name="ResGrid" ColumnDefinitions="*,*,*">
+                    <Button Grid.Column="0" Content="800p" Click="ResolutionButton_Click" Tag="1280,800" HorizontalAlignment="Stretch" Margin="2" FontSize="12" Padding="4,2" />
+                    <Button Grid.Column="1" Content="1000p" Click="ResolutionButton_Click" Tag="1600,1000" HorizontalAlignment="Stretch" Margin="2" FontSize="12" Padding="4,2" />
+                    <Button Grid.Column="2" Content="1200p" Click="ResolutionButton_Click" Tag="1920,1200" HorizontalAlignment="Stretch" Margin="2" FontSize="12" Padding="4,2" />
+                </Grid>
+            </StackPanel>
+
+            <StackPanel Spacing="8">
+                <StackPanel Orientation="Horizontal" Spacing="10">
+                    <FontIcon Glyph="&#xE815;" FontSize="16" />
+                    <TextBlock Text="Refresh Rate" FontWeight="SemiBold" />
+                </StackPanel>
+                <Grid x:Name="RefreshGrid" ColumnDefinitions="*,*">
+                    <Button Grid.Column="0" Content="60Hz" Click="RefreshButton_Click" Tag="60" HorizontalAlignment="Stretch" Margin="2" FontSize="12" Padding="4,2" />
+                    <Button Grid.Column="1" Content="144Hz" Click="RefreshButton_Click" Tag="144" HorizontalAlignment="Stretch" Margin="2" FontSize="12" Padding="4,2" />
+                </Grid>
+            </StackPanel>
+
+            <!-- Battery info -->
+            <StackPanel Orientation="Horizontal" Spacing="10" HorizontalAlignment="Center" Margin="0,20,0,0" Opacity="0.7">
+                <FontIcon x:Name="BatteryIcon" Glyph="&#xEBA0;" FontSize="14" />
+                <TextBlock x:Name="BatteryText" Text="--%" FontSize="14" />
+            </StackPanel>
+        </StackPanel>
+    </Grid>
+</Window>

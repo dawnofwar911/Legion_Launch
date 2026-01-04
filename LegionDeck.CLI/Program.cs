@@ -59,6 +59,89 @@ public class Program
         public string? SetApiKey { get; set; }
     }
 
+    [Verb("debug", HelpText = "Debug utilities.")]
+    public class DebugOptions
+    {
+        [Option("wmi", Required = false, HelpText = "Explore WMI namespaces for Lenovo power controls.")]
+        public bool Wmi { get; set; }
+
+        [Option("power", Required = false, HelpText = "Read current thermal mode from WMI.")]
+        public bool Power { get; set; }
+
+        [Option("fan", Required = false, HelpText = "Read current smart fan mode from WMI.")]
+        public bool Fan { get; set; }
+
+        [Option("battery", Required = false, HelpText = "Read current battery level.")]
+        public bool Battery { get; set; }
+
+        [Option("temp", Required = false, HelpText = "Read CPU/GPU temperatures.")]
+        public bool Temp { get; set; }
+
+        [Option("acpi-temp", Required = false, HelpText = "Read ACPI thermal zone temperature.")]
+        public bool AcpiTemp { get; set; }
+
+        [Option("status", Required = false, HelpText = "Read WinKey and Trackpad status.")]
+        public bool Status { get; set; }
+
+        [Option("product", Required = false, HelpText = "Read product info.")]
+        public bool Product { get; set; }
+
+        [Option("panel", Required = false, HelpText = "Read panel status.")]
+        public bool Panel { get; set; }
+
+        [Option("brightness", Required = false, HelpText = "Read current brightness.")]
+        public bool Brightness { get; set; }
+
+        [Option("fan-status", Required = false, HelpText = "Read fan cooling status.")]
+        public bool FanStatus { get; set; }
+
+        [Option("fan-support", Required = false, HelpText = "Check if fan cooling is supported.")]
+        public bool FanSupport { get; set; }
+
+        [Option("set-brightness", Required = false, HelpText = "Set brightness (0-100).")]
+        public int? SetBrightness { get; set; }
+
+        [Option("set-power", Required = false, HelpText = "Set thermal mode (1=Quiet, 2=Balanced, 3=Performance).")]
+        public int? SetPower { get; set; }
+
+        [Option("set-fan", Required = false, HelpText = "Set smart fan mode (1=Quiet, 2=Balanced, 3=Performance).")]
+        public int? SetFan { get; set; }
+
+        [Option("set-fan-boost", Required = false, HelpText = "Set fan boost (true/false).")]
+        public bool? SetFanBoost { get; set; }
+
+        [Option("set-touchpad", Required = false, HelpText = "Set touchpad status (true/false).")]
+        public bool? SetTouchpad { get; set; }
+
+        [Option("set-kb-light", Required = false, HelpText = "Set keyboard light data (uint).")]
+        public int? SetKbLight { get; set; }
+
+        [Option("set-igpu", Required = false, HelpText = "Set iGPU mode.")]
+        public int? SetIgpu { get; set; }
+
+        [Option("set-light", Required = false, HelpText = "Set lighting (Format: ID,State,Brightness).")]
+        public string? SetLight { get; set; }
+
+        [Option("set-fan-table", Required = false, HelpText = "Set fan table (0=Auto, 1=Full?).")]
+        public int? SetFanTable { get; set; }
+
+        [Option("set-feature", Required = false, HelpText = "Set generic feature (Format: ID,Value).")]
+        public string? SetFeature { get; set; }
+        [Option("display-info", Required = false, HelpText = "List supported display modes.")]
+        public bool DisplayInfo { get; set; }
+
+        [Option("set-display", Required = false, HelpText = "Set display mode (Format: Width,Height,Hz e.g., 1920,1200,144).")]
+        public string? SetDisplay { get; set; }
+        [Option("set-crosshair", Required = false, HelpText = "Set hardware crosshair mode (0=Off, 1=Type1, 2=Type2?).")]
+        public int? SetCrosshair { get; set; }
+
+        [Option("set-gamut", Required = false, HelpText = "Set color gamut (0=Native?, 1=sRGB?, 2=DCI-P3?).")]
+        public int? SetGamut { get; set; }
+
+        [Option("set-latency", Required = false, HelpText = "Set low latency mode (0=Off, 1=On).")]
+        public int? SetLatency { get; set; }
+    }
+
     static async Task Main(string[] args)
     {
         if (args.Length > 0 && args[0] == "dump-uplay")
@@ -68,12 +151,13 @@ public class Program
         }
         using var host = CreateHostBuilder(args).Build();
 
-        await Parser.Default.ParseArguments<Options, AuthOptions, SyncOptions, ConfigOptions>(args)
+        await Parser.Default.ParseArguments<Options, AuthOptions, SyncOptions, ConfigOptions, DebugOptions>(args)
             .MapResult(
                 (Options opts) => RunOptions(opts),
                 (AuthOptions opts) => RunAuthAndReturnExitCode(opts, host.Services),
                 (SyncOptions opts) => RunSyncAndReturnExitCode(opts, host.Services),
                 (ConfigOptions opts) => RunConfigAndReturnExitCode(opts, host.Services),
+                (DebugOptions opts) => RunDebugAndReturnExitCode(opts),
                 errs => Task.FromResult(1)
             );
     }
@@ -96,6 +180,168 @@ public class Program
                 services.AddSingleton<ConfigService>(); 
                 services.AddTransient<ItadApiService>(); 
             });
+
+    static Task<int> RunDebugAndReturnExitCode(DebugOptions opts)
+    {
+        if (opts.DisplayInfo)
+        {
+            Console.WriteLine($"Current Mode: {LegionDeck.Core.Services.DisplayService.GetCurrentMode()}");
+            Console.WriteLine("Supported Modes:");
+            foreach (var mode in LegionDeck.Core.Services.DisplayService.GetSupportedModes())
+            {
+                Console.WriteLine($"  {mode}");
+            }
+        }
+
+        if (!string.IsNullOrEmpty(opts.SetDisplay))
+        {
+            var parts = opts.SetDisplay.Split(',');
+            if (parts.Length == 3 && 
+                int.TryParse(parts[0], out int w) && 
+                int.TryParse(parts[1], out int h) && 
+                int.TryParse(parts[2], out int hz))
+            {
+                bool success = LegionDeck.Core.Services.DisplayService.SetDisplayMode(w, h, hz);
+                Console.WriteLine($"SetDisplayMode({w}x{h} @ {hz}Hz) success: {success}");
+            }
+            else
+            {
+                Console.WriteLine("Invalid format. Use: Width,Height,Hz");
+            }
+        }
+
+        if (opts.SetCrosshair.HasValue)
+        {
+            Console.WriteLine(LegionDeck.Core.Utilities.WmiExplorer.SetPanelCrosshair(opts.SetCrosshair.Value));
+        }
+
+        if (opts.SetGamut.HasValue)
+        {
+            Console.WriteLine(LegionDeck.Core.Utilities.WmiExplorer.SetPanelGamut(opts.SetGamut.Value));
+        }
+
+        if (opts.SetLatency.HasValue)
+        {
+            Console.WriteLine(LegionDeck.Core.Utilities.WmiExplorer.SetLowLatency(opts.SetLatency.Value));
+        }
+
+        if (opts.Wmi)
+        {
+            var results = LegionDeck.Core.Utilities.WmiExplorer.Explore();
+            foreach (var line in results) Console.WriteLine(line);
+        }
+        
+        if (opts.Power)
+        {
+            Console.WriteLine(LegionDeck.Core.Utilities.WmiExplorer.ReadThermalMode());
+        }
+        
+        if (opts.Fan)
+        {
+            Console.WriteLine(LegionDeck.Core.Utilities.WmiExplorer.ReadSmartFanMode());
+        }
+        
+        if (opts.Battery)
+        {
+            Console.WriteLine(LegionDeck.Core.Utilities.WmiExplorer.ReadBattery());
+        }
+        
+        if (opts.Temp)
+        {
+            Console.WriteLine(LegionDeck.Core.Utilities.WmiExplorer.ReadTemperatures());
+        }
+        
+        if (opts.AcpiTemp)
+        {
+            Console.WriteLine(LegionDeck.Core.Utilities.WmiExplorer.ReadThermalZoneTemp());
+        }
+        
+        if (opts.Status)
+        {
+            Console.WriteLine(LegionDeck.Core.Utilities.WmiExplorer.ReadOsStatus());
+        }
+        
+        if (opts.Product)
+        {
+            Console.WriteLine(LegionDeck.Core.Utilities.WmiExplorer.ReadProductInfo());
+        }
+        
+        if (opts.Panel)
+        {
+            Console.WriteLine(LegionDeck.Core.Utilities.WmiExplorer.ReadPanelStatus());
+        }
+        
+        if (opts.Brightness)
+        {
+            Console.WriteLine($"Current Brightness: {LegionDeck.Core.Services.SystemControlService.GetBrightness()}%");
+        }
+        
+        if (opts.FanStatus)
+        {
+            Console.WriteLine(LegionDeck.Core.Utilities.WmiExplorer.ReadFanCoolingStatus());
+        }
+        
+        if (opts.FanSupport)
+        {
+            Console.WriteLine(LegionDeck.Core.Utilities.WmiExplorer.CheckFanCoolingSupport());
+        }
+        
+        if (opts.SetBrightness.HasValue)
+        {
+            LegionDeck.Core.Services.SystemControlService.SetBrightness(opts.SetBrightness.Value);
+            Console.WriteLine($"Brightness set to {opts.SetBrightness.Value}%");
+        }
+        
+        if (opts.SetPower.HasValue)
+        {
+            Console.WriteLine(LegionDeck.Core.Utilities.WmiExplorer.SetThermalMode(opts.SetPower.Value));
+        }
+        
+        if (opts.SetFan.HasValue)
+        {
+            Console.WriteLine(LegionDeck.Core.Utilities.WmiExplorer.SetSmartFanMode(opts.SetFan.Value));
+        }
+        
+        if (opts.SetFanBoost.HasValue)
+        {
+            Console.WriteLine(LegionDeck.Core.Utilities.WmiExplorer.SetFanBoost(opts.SetFanBoost.Value));
+        }
+        
+        if (opts.SetTouchpad.HasValue)
+        {
+             Console.WriteLine(LegionDeck.Core.Utilities.WmiExplorer.SetTrackpadStatus(opts.SetTouchpad.Value));
+        }
+
+        if (opts.SetKbLight.HasValue)
+        {
+            bool success = LegionDeck.Core.Services.LenovoPowerService.SetKeyboardLight(opts.SetKbLight.Value);
+            Console.WriteLine($"SetKeyboardLight({opts.SetKbLight.Value}) success: {success}");
+        }
+        
+        if (opts.SetIgpu.HasValue)
+        {
+            bool success = LegionDeck.Core.Services.LenovoPowerService.SetIGPUMode(opts.SetIgpu.Value);
+            Console.WriteLine($"SetIGPUMode({opts.SetIgpu.Value}) success: {success}");
+        }
+        
+        if (opts.SetFanTable.HasValue)
+        {
+            Console.WriteLine(LegionDeck.Core.Utilities.WmiExplorer.SetFanTable(opts.SetFanTable.Value));
+        }
+        
+        if (!string.IsNullOrEmpty(opts.SetLight))
+        {
+            var parts = opts.SetLight.Split(',');
+            if (parts.Length == 3)
+            {
+                int id = int.Parse(parts[0]);
+                int state = int.Parse(parts[1]);
+                int bri = int.Parse(parts[2]);
+                Console.WriteLine(LegionDeck.Core.Utilities.WmiExplorer.SetLighting(id, state, bri));
+            }
+        }
+        return Task.FromResult(0);
+    }
 
     static Task<int> RunOptions(Options opts)
     {
@@ -219,21 +465,6 @@ public class Program
         }
         else if (opts.Service.Equals("battlenet", StringComparison.OrdinalIgnoreCase))
         {
-             // Note: BattleNetAuthService isn't registered in DI yet, so we instantiate directly or add it.
-             // Best to add it to CreateHostBuilder. But for now, we can try direct instantiation if needed, 
-             // but let's assume I'll register it in the next step.
-             // Actually, I should check if I registered it. I didn't register BattleNetAuthService in Program.cs.
-             // I will add the registration logic in the next step.
-             // Wait, I can't do two things at once. I'll add the case here assuming registration.
-             
-             // Wait, I need to register it first or use `new BattleNetAuthService()`. 
-             // Since DI is used, I should register it.
-             // I'll add the case now and fix registration immediately after.
-             
-             // Actually, I'll instantiate directly to avoid breaking the build if I forget to register.
-             // But the method signature uses `IServiceProvider services`.
-             // I'll register it properly in CreateHostBuilder in a separate edit.
-             
              var bnetAuth = new BattleNetAuthService(); // Direct instantiation for now
              try
              {
@@ -434,7 +665,7 @@ public class Program
                         var otherSubs = activeSubs.Where(s => !s.Contains("Game Pass", StringComparison.OrdinalIgnoreCase) && !s.Contains("EA Play", StringComparison.OrdinalIgnoreCase) && !s.Contains("Ubisoft", StringComparison.OrdinalIgnoreCase)).ToList();
                         
                         if (isOnEaPlay && userHasEaPlayAccess) statusMessage += " & EA Play!";
-                        if (isOnUbisoftPlus && userHasUbisoftPlusAccess) statusMessage += " & Ubisoft+!";
+                        if (isOnUbisoftPlus && userHasUbisoftPlusAccess) statusMessage += " & Ubisoft+!" ;
                         
                         if (otherSubs.Any())
                         {
@@ -601,7 +832,7 @@ public class Program
         Console.WriteLine("Configuring application settings...");
         if (!string.IsNullOrEmpty(opts.SetApiKey))
         {
-            var parts = opts.SetApiKey.Split('=', 2); // Split only on the first '='
+            var parts = opts.SetApiKey.Split('=', 2); // Split only on the first '=' 
             if (parts.Length == 2)
             {
                 var serviceName = parts[0].Trim();

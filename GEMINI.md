@@ -97,8 +97,8 @@ Epic: com.epicgames.launcher://
 - Troubleshooting: If the app crashes on launch, check `%LOCALAPPDATA%\LegionDeck\startup.log`.
 
 7. Current Context / Active Task
-Status: Phase 3.5 substantially complete. Transitioning to Handheld Features.
-Next Action: Game Process Monitoring (Preparation for TDP Profiles).
+Status: Phase 4 core features substantially complete. Refining Handheld UX.
+Next Action: Force-Quit Game button and Sleep/Hibernation logic.
 
 Roadmap Progress:
 [x] Phase 1: The Brain (CLI) - COMPLETE
@@ -117,9 +117,11 @@ Roadmap Progress:
     [x] Step 3: Battle.net Integration (Cloud Sync + Registry Detection + Normalized IDs).
     [x] Step 4: UI Polish (SelectionMode=None, Focus Persistence, InfoBar Error Handling).
 
-[ ] Phase 4: The Experience (Handheld Features) - NEXT
-    [ ] Step 1: Game Process Monitoring (Detect when game starts/stops).
-    [ ] Step 2: TDP/Power Profiles (Lenovo Legion Go Integration).
-    [ ] Step 3: Quick Settings Overlay (Brightness, Volume, Resolution).
-    [ ] Step 4: Battery Monitoring & Auto-Sleep.
-    [ ] Step 5: Controller Mapping Profiles.
+[ ] Phase 4: The Experience (Handheld Features) - IN PROGRESS
+    [x] Step 1: Game Process Monitoring (Detect when game starts/stops).
+    [x] Step 2: TDP/Power Profiles (Automatic per-game profiles with shared config).
+    [x] Step 3: Quick Settings Overlay (Volume, Brightness, Res, Hz with Gamepad support).
+    [x] Step 4: Battery Monitoring (Real-time updates in overlay).
+    [ ] Step 5: "Quit Game" button in Overlay.
+    [ ] Step 6: Auto-Sleep / Hibernation logic.
+    [ ] Step 7: Controller Mapping Profiles.

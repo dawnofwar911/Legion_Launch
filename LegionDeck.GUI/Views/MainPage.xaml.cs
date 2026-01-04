@@ -37,15 +37,36 @@ public sealed partial class MainPage : Page
         }
     }
 
+    private QuickSettingsOverlay? _quickSettings;
+
     private void OnGamepadButtonDown(object? sender, Services.GamepadService.GamepadButton button)
     {
         this.DispatcherQueue.TryEnqueue(() =>
         {
             try 
             {
+                // If overlay is active, ignore most main app inputs
+                if (QuickSettingsOverlay.IsOverlayActive && button != Services.GamepadService.GamepadButton.View)
+                {
+                    return;
+                }
+
                 Log($"Gamepad Action: {button}");
                 switch (button)
                 {
+                    case Services.GamepadService.GamepadButton.View: // Toggle Quick Settings
+                        if (_quickSettings == null)
+                        {
+                            _quickSettings = new QuickSettingsOverlay();
+                            _quickSettings.Closed += (s, e) => _quickSettings = null;
+                            _quickSettings.Activate();
+                        }
+                        else
+                        {
+                            _quickSettings.Close();
+                            _quickSettings = null;
+                        }
+                        break;
                     case Services.GamepadService.GamepadButton.Menu:
                         NavView.IsPaneOpen = !NavView.IsPaneOpen;
                         if (NavView.IsPaneOpen) 

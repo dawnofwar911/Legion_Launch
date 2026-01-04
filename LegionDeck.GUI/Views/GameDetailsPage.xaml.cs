@@ -24,7 +24,7 @@ public sealed partial class GameDetailsPage : Page
     public GameDetailsPage()
     {
         this.InitializeComponent();
-        _configService = new ConfigService();
+        _configService = App.Config;
         _sgdbService = new SteamGridDbService(_configService);
         _metadataService = new MetadataService();
         _steamStoreService = new SteamStoreService();
@@ -41,6 +41,18 @@ public sealed partial class GameDetailsPage : Page
             GameTitle.Text = libraryVM.Name;
             GameSource.Text = libraryVM.Source;
             SetBadgeColor(libraryVM.Source);
+
+            // Load per-game power mode
+            var profile = _configService.GetProfile(libraryVM.GameData.Id);
+            int modeValue = profile.PowerMode;
+            foreach (ComboBoxItem item in PowerModeCombo.Items)
+            {
+                if (item.Tag.ToString() == modeValue.ToString())
+                {
+                    PowerModeCombo.SelectedItem = item;
+                    break;
+                }
+            }
             
             // Check cache for hero image first
             var cachedHero = _metadataService.GetHero(libraryVM.GameData.Id);
@@ -241,6 +253,19 @@ public sealed partial class GameDetailsPage : Page
         if (this.Frame.CanGoBack)
         {
             this.Frame.GoBack();
+        }
+    }
+
+    private void PowerModeCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_gameViewModel is LibraryGameViewModel libraryVM && PowerModeCombo.SelectedItem is ComboBoxItem item)
+        {
+            if (int.TryParse(item.Tag.ToString(), out int mode))
+            {
+                var profile = _configService.GetProfile(libraryVM.GameData.Id);
+                profile.PowerMode = mode;
+                _configService.SetProfile(libraryVM.GameData.Id, profile);
+            }
         }
     }
 

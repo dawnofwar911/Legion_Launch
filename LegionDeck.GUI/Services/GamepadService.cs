@@ -11,7 +11,7 @@ public class GamepadService
 {
     public static GamepadService Instance { get; private set; }
 
-    public enum GamepadButton { Up, Down, Left, Right, A, B, X, Y, Menu }
+    public enum GamepadButton { Up, Down, Left, Right, A, B, X, Y, Menu, View }
     public event EventHandler<GamepadButton>? ButtonDown;
 
     private DispatcherQueueTimer _timer;
@@ -121,8 +121,9 @@ public class GamepadService
             CheckButton(buttons, GamepadButtons.X, GamepadButton.X);
             CheckButton(buttons, GamepadButtons.Y, GamepadButton.Y);
             CheckButton(buttons, GamepadButtons.Menu, GamepadButton.Menu);
+            CheckButton(buttons, GamepadButtons.View, GamepadButton.View);
         }
-        catch {{ }}
+        catch { }
     }
 
     private void CheckStick(double x, double y)

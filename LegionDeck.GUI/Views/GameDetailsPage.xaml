@@ -46,6 +46,16 @@
                     <Button Content="Back" Width="150" Height="45" Click="BackButton_Click" UseSystemFocusVisuals="True" />
                 </StackPanel>
 
+                <StackPanel Spacing="8">
+                    <TextBlock Text="Power Profile" FontWeight="Bold" Opacity="0.7" />
+                    <ComboBox x:Name="PowerModeCombo" Width="200" SelectionChanged="PowerModeCombo_SelectionChanged" UseSystemFocusVisuals="True">
+                        <ComboBoxItem Content="Performance" Tag="3" />
+                        <ComboBoxItem Content="Balanced" Tag="2" />
+                        <ComboBoxItem Content="Quiet" Tag="1" />
+                    </ComboBox>
+                    <TextBlock Text="Automatic switching requires Admin rights." FontSize="12" Opacity="0.5" />
+                </StackPanel>
+
                 <TextBlock x:Name="GameDescription" FontSize="16" TextWrapping="Wrap" />
 
                 <StackPanel x:Name="SubscriptionPanel" Spacing="10" Visibility="Collapsed">
